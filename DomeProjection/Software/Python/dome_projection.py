@@ -51,9 +51,9 @@ class domeDisplay:
             The number of vertical pixels in the projector image.
         """
 
-        ########################################
+        ############################################################
         # properties passed in as arguments
-        ########################################
+        ############################################################
         self._screenWidth = screenWidth
         self._screenHeight = screenHeight
         self._camera2screenDist = camera2screenDist
@@ -83,6 +83,9 @@ class domeDisplay:
         x = self._screenWidth*(columns/(self._imagePixelWidth - 1) - 0.5)
         z = self._screenHeight*(rows/(self._imagePixelHeight - 1) - 0.5)
 
+        debug_image = Image.fromarray(255*(x + 0.5), mode='L')
+        debug_image.show()
+
         # y is the distance from the camera to the screen
         y = self._camera2screenDist
         r = sqrt(x**2 + y**2 + z**2)
@@ -103,21 +106,32 @@ class domeDisplay:
         z = self._screenHeight*(rows/(self._imagePixelHeight - 1) - 0.5)
         y = self._camera2screenDist
         r = sqrt(x**2 + y**2 + z**2)
-        self._mouseViewpoint = array([x/r, y/r, z/r])
+        self._mouseViewpoint = dstack([x/r, y/r, z/r])
 
     
-    def calculate_weights(imagePixelWidth, imagePixelHeight, 
-                          projectorPixelWidth, projectorPixelHeight):
+        ############################################################
+        # Calculate the weights used to compute the projector pixel
+        # values from the OpenGL image's pixel values.
+        ############################################################
+
         """
-        Calculate the binary weight matrix used to calculate projector pixel RGB
-        values from OpenGL image pixel RGB values.  For each OpenGL image pixel
-        determine its direction as measured from the virtual camera.  Each OpenGL
-        image pixel will contribute to the the projector pixel to which it is
-        closest in direction.
+        Calculate the binary weight matrix used to calculate projector pixel
+        RGB values from OpenGL image pixel RGB values.  For each OpenGL image
+        pixel determine its direction as measured from the virtual camera.
+        Each OpenGL image pixel will contribute to the the projector pixel to
+        which it is closest in direction.
         """
-        #weights = matrix of unit vectors from 
-        weights = ones([self._imagePixelHeight, self._imagePixelWidth, 3])
-        return weights
+        # make a vector out of the virtual camera viewpoint
+        numImagePixels = self._imagePixelHeight * self._imagePixelWidth
+        imageVector = reshape(self._cameraViewpoint, [numImagePixels, 3])
+
+        # make a vector out of the mouse's viewpoint
+        numProjPixels = self._projectorPixelHeight * self._projectorPixelWidth
+        projectorVector = reshape(self._mouseViewpoint, [numProjPixels, 3])
+
+        # Calculate weights
+        # Need to calculate outer products of inner products
+        self._weights[1] = outer(imageVector, projectorVector)
 
 
 
