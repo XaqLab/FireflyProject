@@ -19,8 +19,8 @@ average of the RGB values from the OpenGL image contributing pixels.
 class domeDisplay:
     """
     The dome display class describes the geometry of our dome, spherical
-    mirror, and projector as well as the geometry of OpenGL's virtual camera
-    and screen.
+    mirror, and projector along with the geometry of the associated OpenGL
+    virtual camera and screen.
     """
     def __init__(self,
                  screenWidth = 1,
@@ -28,8 +28,8 @@ class domeDisplay:
                  camera2screenDist = 1,
                  imagePixelWidth = 512,
                  imagePixelHeight = 512,
-                 projectorPixelWidth = 512,
-                 projectorPixelHeight = 512):
+                 projectorPixelWidth = 256,
+                 projectorPixelHeight = 256):
 
         """
         Parameters:
@@ -52,7 +52,7 @@ class domeDisplay:
         """
 
         ############################################################
-        # properties passed in as arguments
+        # Properties passed in as arguments
         ############################################################
         self._screenWidth = screenWidth
         self._screenHeight = screenHeight
@@ -63,13 +63,19 @@ class domeDisplay:
         self._projectorPixelHeight = projectorPixelHeight
 
         ############################################################
+        # Properties used to share results between method calls
+        ############################################################
+        self._projectorPixelRow = 0
+        self._projectorPixelCol = 0
+
+        ############################################################
         # Properties calculated from arguments
         ############################################################
 
-        ############################################################
-        # Calculate the directions of all the OpenGL image pixels
-        # from the virtual camera's viewpoint.
-        ############################################################
+        """
+        Calculate the directions of all the OpenGL image pixels
+        from the virtual camera's viewpoint.
+        """
 
         # Make matricies of row and column values
         rows = array([[float(i)]*self._imagePixelWidth for i in 
@@ -83,55 +89,149 @@ class domeDisplay:
         x = self._screenWidth*(columns/(self._imagePixelWidth - 1) - 0.5)
         z = self._screenHeight*(rows/(self._imagePixelHeight - 1) - 0.5)
 
-        debug_image = Image.fromarray(255*(x + 0.5), mode='L')
-        debug_image.show()
-
         # y is the distance from the camera to the screen
         y = self._camera2screenDist
         r = sqrt(x**2 + y**2 + z**2)
         self._cameraViewpoint = dstack((x/r, y/r, z/r))
 
 
-        ############################################################
-        # Calculate the direction of all the projector pixel's
-        # projections from the mouse's viewpoint.
-        ############################################################
+        """
+        Calculate the direction of all the projector pixel's projections
+        from the mouse's viewpoint.
+        """
 
         # Fake mapping for now, same as camera mapping
-        rows = array([[float(i)]*self._imagePixelWidth for i in 
-                      range(self._imagePixelHeight)])
-        columns = array([[float(i)]*self._imagePixelHeight for i in
-                         range(self._imagePixelWidth)]).T
-        x = self._screenWidth*(columns/(self._imagePixelWidth - 1) - 0.5)
-        z = self._screenHeight*(rows/(self._imagePixelHeight - 1) - 0.5)
+        rows = array([[float(i)]*self._projectorPixelWidth for i in 
+                      range(self._projectorPixelHeight)])
+        columns = array([[float(i)]*self._projectorPixelHeight for i in
+                         range(self._projectorPixelWidth)]).T
+        x = self._screenWidth*(columns/(self._projectorPixelWidth - 1) - 0.5)
+        z = self._screenHeight*(rows/(self._projectorPixelHeight - 1) - 0.5)
         y = self._camera2screenDist
         r = sqrt(x**2 + y**2 + z**2)
         self._mouseViewpoint = dstack([x/r, y/r, z/r])
 
     
-        ############################################################
-        # Calculate the weights used to compute the projector pixel
-        # values from the OpenGL image's pixel values.
-        ############################################################
-
         """
-        Calculate the binary weight matrix used to calculate projector pixel
-        RGB values from OpenGL image pixel RGB values.  For each OpenGL image
-        pixel determine its direction as measured from the virtual camera.
-        Each OpenGL image pixel will contribute to the the projector pixel to
-        which it is closest in direction.
+        For each OpenGL image pixel use the directions calculated above
+        to find the projector pixel with the closest direction.  Then add that
+        OpenGL pixel to the projector pixel's list of contributing pixels.
         """
-        # make a vector out of the virtual camera viewpoint
-        numImagePixels = self._imagePixelHeight * self._imagePixelWidth
-        imageVector = reshape(self._cameraViewpoint, [numImagePixels, 3])
 
-        # make a vector out of the mouse's viewpoint
-        numProjPixels = self._projectorPixelHeight * self._projectorPixelWidth
-        projectorVector = reshape(self._mouseViewpoint, [numProjPixels, 3])
+        # This 2D list of lists contains the list of OpenGL pixels
+        # that contribute to each projector pixel.
+        self._contributingPixels = \
+            [[[] for i in range(self._projectorPixelHeight)]
+             for j in range(self._projectorPixelWidth)]
+        row = 0
+        while row < self._imagePixelHeight:
+            for col in range(self._imagePixelHeight):
+                """
+                For each OpenGL image pixel, determine which projector
+                pixel has the closest direction.  
+                """
+                [r, c] = self._find_closest_projector_pixel(row, col) 
+                self._contributingPixels[r][c].append([row, col])
+            row = row + 1
+            for col in range(self._imagePixelHeight - 1, -1, -1):
+                """
+                Go through the pixels in a serpentine pattern so that the
+                current pixel is always close to the last pixel.  This way the
+                search algorithm can use the last result as its starting point.
+                """
+                [r, c] = self._find_closest_projector_pixel(row, col) 
+                self._contributingPixels[r][c].append([row, col])
+            row = row + 1
 
-        # Calculate weights
-        # Need to calculate outer products of inner products
-        self._weights[1] = outer(imageVector, projectorVector)
+
+    def _find_closest_projector_pixel(self, row, col):
+        """
+        For the OpenGL image pixel specified by row and col use the directions
+        in self._comeraViewpoint and self._mouseViewpoint to find the projector
+        pixel which has the closest direction and return its row and column in
+        a list.  This is done using a search method rather than calculating the
+        dot product for every projector pixel.
+        """
+        cameraDirection = self._cameraViewpoint[row, col]
+
+        # Start with the last projector pixel
+        r = self._projectorPixelRow
+        c = self._projectorPixelCol
+        mouseDirection = self._mouseViewpoint[r, c]
+
+        # Calculate dot product of this OpenGL pixel
+        # with the last projector pixel.
+        dp = dot(cameraDirection, mouseDirection)
+
+        # Calculate dot product of this OpenGL pixel with the
+        # neighboring projector pixels.
+        [neighbor_dps, neighbors] = \
+            self._calc_neighbor_dot_products(r, c, cameraDirection)
+
+        while max(neighbor_dps) > dp:
+            """
+            If the dot product with one of the neighboring projector pixels is 
+            larger then update r and c to that pixel and check its neighbors.
+            Repeat until all neighbors have smaller (or equal) dot products.
+            """
+            dp = max(neighbor_dps)
+            [r, c] = neighbors[neighbor_dps.index(dp)]
+            [neighbor_dps, neighbors] = \
+                self._calc_neighbor_dot_products(r, c, cameraDirection)
+
+        # Save projector pixel for next call
+        self._projectorPixelRow = r
+        self._projectorPixelCol = c
+        return [r, c]
+
+
+    def _calc_neighbor_dot_products(self, row, col, cameraDirection):
+        """
+        For the projector pixel specified by row and col, calculate the dot
+        product of all its neighbors with the given camera direction.  Return
+        a list containing a list of the dot products and a list of the row and
+        column for each corresponding pixel.
+        """
+        neighbors = []
+        neighbor_dps = []
+
+        # find neighbors
+        row_above = [[-1, -1], [-1, 0], [-1, 1]]
+        beside = [[0, -1], [0, 1]]
+        row_below = [[1, -1], [1, 0], [1, 1]]
+        offsets = row_above + beside + row_below
+        for [dr, dc] in offsets:
+            if row + dr >= 0 and row + dr < self._projectorPixelHeight:
+                if col + dc >= 0 and col + dc < self._projectorPixelWidth:
+                    neighbors.append([row + dr, col + dc])
+
+        # calculate neighbor dot products
+        for neighbor in neighbors:
+            neighborDirection = self._mouseViewpoint[neighbor[0], neighbor[1]]
+            neighbor_dps.append(dot(cameraDirection, neighborDirection))
+
+        return [neighbor_dps, neighbors]
+
+
+    def warpImageForDome(self, image):
+        """
+        Take an RGB input image intended for display on a flat screen and
+        produce an image for the projector that removes the distortions caused
+        by projecting the image onto the dome using a spherical mirror.
+        """
+        assert image.size == (self._imagePixelWidth, self._imagePixelHeight)
+
+        pixels = array(image)
+        warpedPixels = zeros([image.size[0], image.size[0], 3], dtype=uint8)
+        for row in range(self._projectorPixelHeight):
+            for col in range(self._projectorPixelWidth):
+                pixelValue = zeros(3)
+                for n, pixel in enumerate(self._contributingPixels[row][col]):
+                    pixelValue += pixels[pixel[0], pixel[1]]
+                pixelValue = pixelValue/(n + 1)
+                warpedPixels[row][col] = array(pixelValue, dtype=uint8)
+
+        return Image.fromarray(warpedPixels, mode='RGB')
 
 
 
@@ -148,9 +248,9 @@ input_image = Image.open("Lenna.png")
 # read pixel data from image into a list
 if input_image.mode == 'RGB':
     print "RGB image"
-    [rows, columns] = input_image.size
-    pixels = array(input_image)
-    print shape(pixels)
+    #[rows, columns] = input_image.size
+    #pixels = array(input_image)
+    print input_image.size
 else:
     print "Unsupported image mode:", input_image.mode
     exit()
@@ -158,23 +258,12 @@ else:
 # show original image
 input_image.show()
 
+print "Creating instance of domeDisplay Class"
 dome = domeDisplay()
+print "Done initializing dome"
 
-#for col in range(1280):
-    #for row in range(720):
-        #""" for each projector pixel (1280x720) """
-
-        #""" compute it's RGB (or YUV) values as a weighted sum of the values for pixels
-        #in the OpenGL image """
-        #projector_pixel[x][y] = weights * open_gl_image
-
-for row in range(rows):
-    #for col in range(columns):
-    for col in range(10):
-        pixels[row][col] = (0, 0, 0)
-
-
-output_image = Image.fromarray(pixels, mode='RGB')
+#output_image = Image.fromarray(pixels, mode='RGB')
+output_image = dome.warpImageForDome(input_image)
 
 output_image.show()
 #output_image.save("output_file", "PNG")
