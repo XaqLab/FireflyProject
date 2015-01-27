@@ -29,7 +29,16 @@ class domeDisplay:
                  imagePixelWidth = 512,
                  imagePixelHeight = 512,
                  projectorPixelWidth = 256,
-                 projectorPixelHeight = 256):
+                 projectorPixelHeight = 256,
+                 firstProjectorImage = [[-0.05, 0.5, 0.2], [0.05, 0.5, 0.2], 
+                                        [0.05, 0.5, 0.1], [-0.05, 0.5, 0.1]],
+                 secondProjectorImage = [[-0.1, 0.7, 0.3], [0.1, 0.7, 0.3],
+                                         [0.1, 0.7, 0.1], [-0.1, 0.7, 0.1]],
+                 mirrorRadius = 0.6,
+                 domeCenter = [0, 0, 0.1],
+                 domeRadius = 1,
+                 animalPosition = [0, 0, 0.3]
+                 ):
 
         """
         Parameters:
@@ -49,14 +58,32 @@ class domeDisplay:
             The number of horizontal pixels in the projector image.
         @param projectorPixelHeight:
             The number of vertical pixels in the projector image.
+        @param firstProjectorImage:
+            A list of four (x,y1,z) points, starting top left and proceeding
+            clockwise, that specifies the corners of the projector's image
+            at a distance y1 from the center of the mirror.
+        @param secondProjectorImage:
+            A list of four (x,y2,z) points, starting top left and proceeding
+            clockwise, that specifies the corners of the projector's image
+            at a distance y2 from the center of the mirror.
+        @param mirrorRadius:
+            The radius of the mirror in arbitrary units.
+        @param domeCenter:
+            An (x,y,z) vector from the center of the mirror to the center of
+            the dome.
+        @param domeRadius:
+            The radius of the dome in arbitrary units.
+        @param animalPosition:
+            An (x,y,z) vector from the center of the mirror to the position
+            of the animal's eyes.
         """
 
         ############################################################
         # Properties passed in as arguments
         ############################################################
-        self._screenWidth = screenWidth
-        self._screenHeight = screenHeight
-        self._camera2screenDist = camera2screenDist
+        #self._screenWidth = screenWidth
+        #self._screenHeight = screenHeight
+        #self._camera2screenDist = camera2screenDist
         self._imagePixelWidth = imagePixelWidth
         self._imagePixelHeight = imagePixelHeight
         self._projectorPixelWidth = projectorPixelWidth
@@ -72,35 +99,200 @@ class domeDisplay:
         # Properties calculated from arguments
         ############################################################
 
+        ############################################################
+        # Calculate the directions of all the OpenGL image pixels
+        # from the virtual camera's viewpoint.
+        ############################################################
+
         """
-        Calculate the directions of all the OpenGL image pixels
-        from the virtual camera's viewpoint.
+        All positions are relative to OpenGL's virtual camera which
+        is looking down the positive y-axis.
         """
 
-        # Make matricies of row and column values
-        rows = array([[float(i)]*self._imagePixelWidth for i in 
-                      range(self._imagePixelHeight)])
-        columns = array([[float(i)]*self._imagePixelHeight for i in
-                         range(self._imagePixelWidth)]).T
+        # Make matrices of row and column values
+        rows = array([[float(i)]*imagePixelWidth for i in 
+                      range(imagePixelHeight)])
+        columns = array([[float(i)]*imagePixelHeight for i in
+                         range(imagePixelWidth)]).T
 
-        # Calculate x and z values from column and row values so they
-        # are symmetric about the center of the image and scaled to the
-        # screen size.
-        x = self._screenWidth*(columns/(self._imagePixelWidth - 1) - 0.5)
-        z = self._screenHeight*(rows/(self._imagePixelHeight - 1) - 0.5)
+        """
+        Calculate x and z values from column and row values so they
+        are symmetric about the center of the image and scaled to the
+        screen size.
+        """
+        x = screenWidth*(columns/(imagePixelWidth - 1) - 0.5)
+        z = -screenHeight*(rows/(imagePixelHeight - 1) - 0.5)
 
         # y is the distance from the camera to the screen
-        y = self._camera2screenDist
+        y = camera2screenDist
         r = sqrt(x**2 + y**2 + z**2)
         self._cameraViewpoint = dstack((x/r, y/r, z/r))
 
 
+        ##################################################################
+        # Calculate the direction of all the projector pixel's projections
+        # from the mouse's viewpoint.
+        ##################################################################
+
+        # Real forward mapping
+
         """
-        Calculate the direction of all the projector pixel's projections
-        from the mouse's viewpoint.
+        All positions are relative to the center of the hemispherical mirror.
+        The projector is on the positive y-axis (but projecting in the
+        -y direction) and its projected image is assumed to be horizontally
+        centered on the mirror.
         """
 
+        """
+        Find the position of the projector's focal point.  The projector
+        image is horizontally centered on the mirror so the x-component
+        of the focal point's position is zero.  Find the intersection point
+        of the lines along the top and bottom of the projected light to get
+        the focal point's y and z coordinates.
+        """
+        # calculate slope of line along top of projected light
+        upper_z1 = firstProjectorImage[0][2]
+        upper_z2 = secondProjectorImage[0][2]
+        y1 = firstProjectorImage[0][1]
+        y2 = secondProjectorImage[0][1]
+        upperSlope = (upper_z2 - upper_z1)/(y2 - y1)
+
+        # calculate slope of line along bottom of projected light
+        lower_z1 = firstProjectorImage[2][2]
+        lower_z2 = secondProjectorImage[2][2]
+        lowerSlope = (lower_z2 - lower_z1)/(y2 - y1)
+        
+        # find y and z where the lines intersect
+        a = array([[upperSlope, -1], [lowerSlope, -1]])
+        b = array([upperSlope*y1 - upper_z1, lowerSlope*y1 - lower_z1])
+        [y, z] = linalg.solve(a, b)
+        projectorPosition = array([0, y, z])
+
+
+        """
+        Calculate directions from projector's focal point to each projector
+        pixel.  This calculation assumes secondProjectorImage has the same
+        width at the top and bottom.
+        """
+        # Make matrices of row and column values
+        rows = array([[float(i)]*projectorPixelWidth for i in 
+                      range(projectorPixelHeight)])
+        columns = array([[float(i)]*projectorPixelHeight for i in
+                         range(projectorPixelWidth)]).T
+        """
+        Calculate x values from column values so they are symmetric about the
+        center of the image and scaled to the image width.
+        Calculate z values from row values so they start at the top of the
+        image for row 0 and decrease with increasing row number towards and
+        reach the bottom of the image for the last row. 
+        """
+        imageWidth = secondProjectorImage[1][0] - secondProjectorImage[0][0]
+        imageHeight = secondProjectorImage[0][2] - secondProjectorImage[2][2]
+        imageTop = secondProjectorImage[0][2]
+        x = imageWidth*(columns/(projectorPixelWidth - 1) - 0.5)
+        z = imageTop - imageHeight*(rows/(projectorPixelHeight - 1))
+
+        # y is the distance from the mirror center to secondProjectorImage
+        # convert it to a 2D array to match x and z
+        y = (secondProjectorImage[0][1] *
+             ones([projectorPixelHeight, projectorPixelWidth]))
+
+        # vector addition to find vector from focal point to pixel position
+        projectorPixelVectors = dstack([x, y, z]) - projectorPosition
+
+        # calculate theta and phi
+        theta = arctan(y/x)
+        r = sqrt(x**2 + y**2 + z**2)
+        phi = arccos(z/r)
+        projectorPixelDirections = dstack([theta, phi])
+
+        """
+        Complete the triangle consisting of: 
+            1.  the vector from the center of the mirror to the projector's
+                focal point (completely specified)
+            2.  the vector from the projector's focal point to the mirror for
+                the given projector pixel (known direction, unknown length)
+            3.  the vector from the center of the mirror to the point on the
+                mirror where the vector in 2 hits the mirror (known length,
+                unknown direction)
+        Vector 3 is normal to the mirror's surface at the point of reflection
+        and is used to find the direction of the reflected light.
+        """
+        # solve quadratic equation for y-component of vector 2
+        px = projectorPosition[0]
+        py = projectorPosition[1]
+        pz = projectorPosition[2]
+        a0 = px**2 + py**2 + pz**2 - mirrorRadius**2
+        a1 = 2*px*tan(theta) + 2*py + 2*pz*tan(pi/2 - phi)
+        a2 = tan(theta)**2 + 1 + tan(pi/2 - phi)**2
+        incidentLightVectors = zeros([projectorPixelHeight,
+                         projectorPixelWidth, 3])
+        for i in range(projectorPixelHeight):
+            for j in range(projectorPixelHeight):
+                # projection is in the -y direction so take smallest root
+                y = min(roots(array([a2[i, j], a1[i, j], a0])))
+                x = y*tan(theta)
+                z = y*tan(pi/2 - phi)
+                incidentLightVectors[i, j] = [x, y, z]
+
+        mirrorRadiusVectors = projectorPosition + incidentLightVectors
+        mirrorUnitNormals = mirrorRadiusVectors / mirrorRadius
+
+        """
+        Use the incidentLightVectors and the mirrorUnitNormals to find the
+        direction of the reflected light.
+        """
+        reflectedLightDirections = zeros([projectorPixelHeight,
+                         projectorPixelWidth, 3])
+        for i in range(projectorPixelHeight):
+            for j in range(projectorPixelHeight):
+                reflectedLightDirections[i, j] = \
+                    2*dot(incidentLightVectors[i, j], mirrorUnitNormals[i, j]) \
+                    + incidentLightVectors[i, j]
+
+        # calculate theta and phi
+        x = reflectedLightDirections[:, :, 0]
+        y = reflectedLightDirections[:, :, 1]
+        z = reflectedLightDirections[:, :, 2]
+        theta = arctan(y/x)
+        r = sqrt(x**2 + y**2 + z**2)
+        phi = arccos(z/r)
+        reflectedLightDirections = dstack([theta, phi])
+
+        """
+        Complete the triangle again to find the reflected light vectors.
+        The known vector is from the center of the dome to the reflection
+        point on the mirror (calculated as mirrorRadiusVectors - domeCenter)
+        and the length of the vector with unknown direction is the dome radius.
+        """
+        # solve quadratic for y-component of reflected light vectors
+        rpx = mirrorRadiusVectors[:, :, 0] - domeCenter[0]
+        rpy = mirrorRadiusVectors[:, :, 1] - domeCenter[1]
+        rpz = mirrorRadiusVectors[:, :, 2] - domeCenter[2]
+        a0 = rpx**2 + rpy**2 + rpz**2 - domeRadius**2
+        a1 = 2*rpx*tan(theta) + 2*rpy + 2*rpz*tan(pi/2 - phi)
+        a2 = tan(theta)**2 + 1 + tan(pi/2 - phi)**2
+        reflectedLightVectors = zeros([projectorPixelHeight,
+                         projectorPixelWidth, 3])
+        for i in range(projectorPixelHeight):
+            for j in range(projectorPixelHeight):
+                # not sure how to pick which root
+                y = min(roots(array([a2[i, j], a1[i, j], a0])))
+                x = y*tan(theta)
+                z = y*tan(pi/2 - phi)
+                reflectedLightVectors[i, j] = [x, y, z]
+
+        """
+        Now use the vectors of the reflected light, reflection position on the
+        mirror, and animal position to find the animals view point
+        """
+        self._mouseViewpoint = reflectedLightVectors - animalPosition
+        
+
+
+
         # Fake mapping for now, same as camera mapping
+        """
         rows = array([[float(i)]*self._projectorPixelWidth for i in 
                       range(self._projectorPixelHeight)])
         columns = array([[float(i)]*self._projectorPixelHeight for i in
@@ -110,6 +302,7 @@ class domeDisplay:
         y = self._camera2screenDist
         r = sqrt(x**2 + y**2 + z**2)
         self._mouseViewpoint = dstack([x/r, y/r, z/r])
+        """
 
     
         """
