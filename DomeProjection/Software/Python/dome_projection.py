@@ -30,18 +30,14 @@ class domeDisplay:
                  imagePixelHeight = 512,
                  projectorPixelWidth = 512,
                  projectorPixelHeight = 512,
-                 firstProjectorImage = [[-0.08, 0.3, 0.22], [0.08, 0.3, 0.22], 
-                                        [0.08, 0.3, 0], [-0.08, 0.3, 0]],
-                 secondProjectorImage = [[-0.11, 0.2, 0.25], [0.11, 0.2, 0.25],
-                                         [0.11, 0.2, 0], [-0.11, 0.2, 0]],
-                 #firstProjectorImage = [[-0.08, 0.4, 0.22], [0.08, 0.4, 0.22], 
-                 #                       [0.08, 0.4, 0.075], [-0.08, 0.4, 0.075]],
-                 #secondProjectorImage = [[-0.11, 0.3, 0.25], [0.11, 0.3, 0.25],
-                 #                        [0.11, 0.3, 0.075], [-0.11, 0.3, 0.075]],
-                 mirrorRadius = 0.23,
-                 domeCenter = [0, -0.14, 0.3],
-                 domeRadius = 0.6,
-                 animalPosition = [0, 0, 0.3]
+                 firstProjectorImage = [[-0.09, 0.43, 0.18], [0.09, 0.43, 0.18], 
+                                        [0.09, 0.43, 0.04], [-0.09, 0.43, 0.04]],
+                 secondProjectorImage = [[-0.11, 0.36, 0.21], [0.11, 0.36, 0.21],
+                                         [0.11, 0.36, 0.04], [-0.11, 0.36, 0.04]],
+                 mirrorRadius = 0.2286,
+                 domeCenter = [0, 0.14, 0.42],
+                 domeRadius = 0.64,
+                 animalPosition = [0, 0, 0.5]
                  ):
 
         """
