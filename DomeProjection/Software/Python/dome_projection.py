@@ -98,8 +98,10 @@ class domeDisplay:
         ############################################################
         # Properties used to share results between method calls
         ############################################################
-        self._projectorPixelRow = 0
-        self._projectorPixelCol = 0
+
+        # Start search in the middle of the projector image 
+        self._projectorPixelRow = projectorPixelHeight/2
+        self._projectorPixelCol = projectorPixelWidth/2
 
         ############################################################
         # Properties calculated from arguments
@@ -174,8 +176,6 @@ class domeDisplay:
         pdx = self._projectorPixelDirections[:, :, 0]
         pdy = self._projectorPixelDirections[:, :, 1]
         pdz = self._projectorPixelDirections[:, :, 2]
-        #pdx_by_y = pdx/pdy
-        #pdz_by_y = pdz/pdy
         a0 = px**2 + py**2 + pz**2 - mirrorRadius**2
         a1 = 2*px*pdx + 2*py*pdy + 2*pz*pdz
         a2 = pdx**2 + pdy**2 + pdz**2
@@ -188,9 +188,14 @@ class domeDisplay:
                 for the shorter vector.
                 """
                 r = min(roots(array([a2[i, j], a1[i, j], a0])))
-                x = r*pdx[i, j]
-                y = r*pdy[i, j]
-                z = r*pdz[i, j]
+                if imag(r) == 0:
+                    x = r*pdx[i, j]
+                    y = r*pdy[i, j]
+                    z = r*pdz[i, j]
+                else:
+                    x = 0
+                    y = 0
+                    z = 0
                 incidentLightVectors[i, j] = [x, y, z]
 
         mirrorRadiusVectors = self._projectorPosition + incidentLightVectors
@@ -209,12 +214,16 @@ class domeDisplay:
                          projectorPixelWidth, 3])
         for i in range(projectorPixelHeight):
             for j in range(projectorPixelWidth):
-                u = mirrorUnitNormals[i, j]
-                reflectedLightVector = \
-                    -2*dot(incidentLightVectors[i, j], u)*u \
-                    + incidentLightVectors[i, j]
-                reflectedLightDirections[i, j] = \
-                    reflectedLightVector/linalg.norm(reflectedLightVector)
+                if linalg.norm(incidentLightVectors[i, j]) > 0:
+                    u = mirrorUnitNormals[i, j]
+                    reflectedLightVector = \
+                        -2*dot(incidentLightVectors[i, j], u)*u \
+                        + incidentLightVectors[i, j]
+                    reflectedLightDirections[i, j] = \
+                        reflectedLightVector/linalg.norm(reflectedLightVector)
+                else:
+                    # avoid division by zero
+                    reflectedLightDirections[i, j] = array([0, 0, 0])
 
         # for debug only
         self._reflectedLightDirections = reflectedLightDirections
@@ -232,8 +241,6 @@ class domeDisplay:
         rldx = reflectedLightDirections[:, :, 0]
         rldy = reflectedLightDirections[:, :, 1]
         rldz = reflectedLightDirections[:, :, 2]
-        #rldx_by_z = rldx/rldz
-        #rldy_by_z = rldy/rldz
         a0 = rpx**2 + rpy**2 + rpz**2 - domeRadius**2
         a1 = 2*rpx*rldx + 2*rpy*rldy + 2*rpz*rldz
         a2 = rldx**2 + rldy**2 + rldz**2
@@ -241,21 +248,25 @@ class domeDisplay:
                          projectorPixelWidth, 3])
         for i in range(projectorPixelHeight):
             for j in range(projectorPixelHeight):
-                # take solution with positive vector length
-                r = max(roots(array([a2[i, j], a1[i, j], a0[i, j]])))
-                x = r*rldx[i, j]
-                y = r*rldy[i, j]
-                z = r*rldz[i, j]
-                reflectedLightVectors[i, j] = [x, y, z]
+                if linalg.norm(reflectedLightDirections[i, j]) > 0:
+                    # take solution with positive vector length
+                    r = max(roots(array([a2[i, j], a1[i, j], a0[i, j]])))
+                    x = r*rldx[i, j]
+                    y = r*rldy[i, j]
+                    z = r*rldz[i, j]
+                    reflectedLightVectors[i, j] = [x, y, z]
+                else:
+                    # set reflected vector to animal position so mouse
+                    # viewpoint is zero for pixels that miss the mirror
+                    reflectedLightVectors[i, j] = animalPosition
 
         """
         Now use the vectors of the reflected light, reflection position on the
         mirror, and animal position to find the animals view point
         """
-        self._mouseViewpoint = reflectedLightVectors - animalPosition
+        self._mouseViewpoint = (reflectedLightVectors + mirrorRadiusVectors
+                                - animalPosition)
         
-
-
 
         """
         For each OpenGL image pixel use the directions calculated above
@@ -266,11 +277,11 @@ class domeDisplay:
         # This 2D list of lists contains the list of OpenGL pixels
         # that contribute to each projector pixel.
         self._contributingPixels = \
-            [[[] for i in range(self._projectorPixelHeight)]
-             for j in range(self._projectorPixelWidth)]
+            [[[] for i in range(self._projectorPixelWidth)]
+             for j in range(self._projectorPixelHeight)]
         row = 0
         while row < self._imagePixelHeight:
-            for col in range(self._imagePixelHeight):
+            for col in range(self._imagePixelWidth):
                 """
                 For each OpenGL image pixel, determine which projector
                 pixel has the closest direction.  
@@ -278,7 +289,7 @@ class domeDisplay:
                 [r, c] = self._find_closest_projector_pixel(row, col) 
                 self._contributingPixels[r][c].append([row, col])
             row = row + 1
-            for col in range(self._imagePixelHeight - 1, -1, -1):
+            for col in range(self._imagePixelWidth - 1, -1, -1):
                 """
                 Go through the pixels in a serpentine pattern so that the
                 current pixel is always close to the last pixel.  This way the
@@ -322,48 +333,10 @@ class domeDisplay:
         return projectorPosition
 
 
-    def _find_projector_pixel_directions(self):
-        """
-        Calculate the directions from projector's focal point for each
-        projector pixel.  This calculation assumes secondProjectorImage has
-        the same width at the top and bottom.
-        """
-        # Make matrices of projector row and column values
-        rows = array([[float(i)]*projectorPixelWidth for i in 
-                      range(projectorPixelHeight)])
-        columns = array([[float(i)]*projectorPixelHeight for i in
-                         range(projectorPixelWidth)]).T
-        """
-        Calculate x values from column values so they are symmetric about the
-        center of the image, scaled to the image width, and negative to the
-        right since projection is in the -y direction.
-        Calculate z values from row values so they start at the top of the
-        image for row 0 and decrease with increasing row number towards and
-        reach the bottom of the image for the last row. 
-        """
-        imageWidth = secondProjectorImage[1][0] - secondProjectorImage[0][0]
-        imageHeight = secondProjectorImage[0][2] - secondProjectorImage[2][2]
-        imageTop = secondProjectorImage[0][2]
-        x = -imageWidth*(columns/(projectorPixelWidth - 1) - 0.5)
-        z = imageTop - imageHeight*(rows/(projectorPixelHeight - 1))
-
-        # y is the distance from the projector's focal point to the
-        # secondProjectorImage, convert it to a 2D array to match x and z
-        y = ((secondProjectorImage[0][1] - self._projectorPosition[1]) *
-             ones([projectorPixelHeight, projectorPixelWidth]))
-
-        # calculate theta and phi
-        theta = arctan2(y, x)
-        r = sqrt(x**2 + y**2 + z**2)
-        phi = arccos(z/r)
-
-        return dstack([theta, phi])
-
-
     def _find_closest_projector_pixel(self, row, col):
         """
         For the OpenGL image pixel specified by row and col use the directions
-        in self._comeraViewpoint and self._mouseViewpoint to find the projector
+        in self._cameraViewpoint and self._mouseViewpoint to find the projector
         pixel which has the closest direction and return its row and column in
         a list.  This is done using a search method rather than calculating the
         dot product for every projector pixel.
@@ -438,7 +411,8 @@ class domeDisplay:
         assert image.size == (self._imagePixelWidth, self._imagePixelHeight)
 
         pixels = array(image)
-        warpedPixels = zeros([image.size[0], image.size[0], 3], dtype=uint8)
+        warpedPixels = zeros([self._projectorPixelHeight,
+                              self._projectorPixelWidth, 3], dtype=uint8)
         for row in range(self._projectorPixelHeight):
             for col in range(self._projectorPixelWidth):
                 pixelValue = zeros(3)
