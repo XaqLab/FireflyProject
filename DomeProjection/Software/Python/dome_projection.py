@@ -16,6 +16,8 @@ each projector pixel.  The RGB values for each projector pixel are the
 average of the RGB values from the OpenGL image contributing pixels.
 """
 
+DEBUG = True
+
 class domeDisplay:
     """
     The dome display class describes the geometry of our dome, spherical
@@ -25,7 +27,7 @@ class domeDisplay:
     def __init__(self,
                  screenWidth = 1,
                  screenHeight = 1,
-                 camera2screenDist = 1,
+                 camera2screenDist = 0.5,
                  imagePixelWidth = 512,
                  imagePixelHeight = 512,
                  projectorPixelWidth = 512,
@@ -37,7 +39,7 @@ class domeDisplay:
                  mirrorRadius = 0.2286,
                  domeCenter = [0, 0.14, 0.42],
                  domeRadius = 0.64,
-                 animalPosition = [0, 0, 0.5]
+                 mousePosition = [0, 0, 0.5]
                  ):
 
         """
@@ -73,9 +75,9 @@ class domeDisplay:
             the dome.
         @param domeRadius:
             The radius of the dome in arbitrary units.
-        @param animalPosition:
+        @param mousePosition:
             An (x,y,z) vector from the center of the mirror to the position
-            of the animal's eyes.
+            of the mouse's eyes.
         """
 
         ############################################################
@@ -95,8 +97,8 @@ class domeDisplay:
         # Properties used to share results between method calls
         ############################################################
 
-        # Start search in the middle of the projector image 
-        self._projectorPixelRow = projectorPixelHeight/2
+        # Start search low in the middle of the projector image 
+        self._projectorPixelRow = 3*projectorPixelHeight/4
         self._projectorPixelCol = projectorPixelWidth/2
 
         ############################################################
@@ -112,7 +114,7 @@ class domeDisplay:
         All positions are relative to OpenGL's virtual camera which
         is looking down the positive y-axis.
         """
-        self._cameraViewpoint = \
+        self._cameraViewDirections = \
             flatDisplayDirections(screenHeight, screenWidth,
                                   imagePixelHeight, imagePixelWidth,
                                   camera2screenDist)
@@ -175,32 +177,36 @@ class domeDisplay:
         a0 = px**2 + py**2 + pz**2 - mirrorRadius**2
         a1 = 2*px*pdx + 2*py*pdy + 2*pz*pdz
         a2 = pdx**2 + pdy**2 + pdz**2
+        projectorMask = zeros([projectorPixelHeight,
+                         projectorPixelWidth], dtype=int)
         incidentLightVectors = zeros([projectorPixelHeight,
                          projectorPixelWidth, 3])
         for i in range(projectorPixelHeight):
-            for j in range(projectorPixelHeight):
+            for j in range(projectorPixelWidth):
                 """
                 The vector will intersect the sphere twice.  Find the root
                 for the shorter vector.
                 """
                 r = min(roots(array([a2[i, j], a1[i, j], a0])))
                 if imag(r) == 0:
+                    """
+                    For projector pixels that hit the mirror, calculate the
+                    incident light vector and set the mask to one.
+                    """
                     x = r*pdx[i, j]
                     y = r*pdy[i, j]
                     z = r*pdz[i, j]
-                else:
-                    x = 0
-                    y = 0
-                    z = 0
-                incidentLightVectors[i, j] = [x, y, z]
+                    incidentLightVectors[i, j] = array([x, y, z])
+                    projectorMask[i, j] = 1
 
         mirrorRadiusVectors = self._projectorPosition + incidentLightVectors
         mirrorUnitNormals = mirrorRadiusVectors / mirrorRadius
 
-        # for debug only
-        self._incidentLightVectors = incidentLightVectors
-        self._mirrorRadiusVectors = mirrorRadiusVectors
-        self._mirrorUnitNormals = mirrorUnitNormals
+        if DEBUG:
+            self._projectorMask = projectorMask
+            self._incidentLightVectors = incidentLightVectors
+            self._mirrorRadiusVectors = mirrorRadiusVectors
+            self._mirrorUnitNormals = mirrorUnitNormals
 
         """
         Use the incidentLightVectors and the mirrorUnitNormals to find the
@@ -210,19 +216,16 @@ class domeDisplay:
                          projectorPixelWidth, 3])
         for i in range(projectorPixelHeight):
             for j in range(projectorPixelWidth):
-                if linalg.norm(incidentLightVectors[i, j]) > 0:
+                if projectorMask[i, j] == 1:
                     u = mirrorUnitNormals[i, j]
                     reflectedLightVector = \
                         -2*dot(incidentLightVectors[i, j], u)*u \
                         + incidentLightVectors[i, j]
                     reflectedLightDirections[i, j] = \
                         reflectedLightVector/linalg.norm(reflectedLightVector)
-                else:
-                    # avoid division by zero
-                    reflectedLightDirections[i, j] = array([0, 0, 0])
 
-        # for debug only
-        self._reflectedLightDirections = reflectedLightDirections
+        if DEBUG:
+            self._reflectedLightDirections = reflectedLightDirections
 
         """
         Complete the triangle again to find the reflected light vectors.
@@ -243,27 +246,38 @@ class domeDisplay:
         reflectedLightVectors = zeros([projectorPixelHeight,
                          projectorPixelWidth, 3])
         for i in range(projectorPixelHeight):
-            for j in range(projectorPixelHeight):
-                if linalg.norm(reflectedLightDirections[i, j]) > 0:
-                    # take solution with positive vector length
+            for j in range(projectorPixelWidth):
+                if projectorMask[i, j] == 1:
+                    # For projector pixels that hit the mirror,
+                    # take the solution with positive vector length.
                     r = max(roots(array([a2[i, j], a1[i, j], a0[i, j]])))
                     x = r*rldx[i, j]
                     y = r*rldy[i, j]
                     z = r*rldz[i, j]
                     reflectedLightVectors[i, j] = [x, y, z]
-                else:
-                    # set reflected vector to animal position so mouse
-                    # viewpoint is zero for pixels that miss the mirror
-                    reflectedLightVectors[i, j] = animalPosition
+
+        if DEBUG:
+            self._reflectedLightVectors = reflectedLightVectors
 
         """
         Now use the vectors of the reflected light, reflection position on the
-        mirror, and animal position to find the animals view point
+        mirror, and mouse position to find the mouse's view point
         """
-        self._mouseViewpoint = (reflectedLightVectors + mirrorRadiusVectors
-                                - animalPosition)
-        
+        mouseViewDirections = zeros([projectorPixelHeight,
+                                     projectorPixelWidth, 3])
+        for i in range(projectorPixelHeight):
+            for j in range(projectorPixelWidth):
+                if projectorMask[i, j] == 1:
+                    # For projector pixels that hit the mirror,
+                    # calculate the view direction for the mouse.
+                    mouseViewVector = (reflectedLightVectors[i, j]
+                                       + mirrorRadiusVectors[i, j]
+                                       - mousePosition)
+                    magnitude = linalg.norm(mouseViewVector)
+                    mouseViewDirections[i, j] = mouseViewVector/magnitude
 
+        self._mouseViewDirections = mouseViewDirections
+        
         """
         For each OpenGL image pixel use the directions calculated above
         to find the projector pixel with the closest direction.  Then add that
@@ -332,17 +346,17 @@ class domeDisplay:
     def _find_closest_projector_pixel(self, row, col):
         """
         For the OpenGL image pixel specified by row and col use the directions
-        in self._cameraViewpoint and self._mouseViewpoint to find the projector
-        pixel which has the closest direction and return its row and column in
-        a list.  This is done using a search method rather than calculating the
-        dot product for every projector pixel.
+        in self._cameraViewDirections and self._mouseViewDirections to find the
+        projector pixel which has the closest direction and return its row and
+        column in a list.  This is done using a search method rather than
+        calculating the dot product for every projector pixel.
         """
-        cameraDirection = self._cameraViewpoint[row, col]
+        cameraDirection = self._cameraViewDirections[row, col]
 
         # Start with the last projector pixel
         r = self._projectorPixelRow
         c = self._projectorPixelCol
-        mouseDirection = self._mouseViewpoint[r, c]
+        mouseDirection = self._mouseViewDirections[r, c]
 
         # Calculate dot product of this OpenGL pixel
         # with the last projector pixel.
@@ -392,10 +406,35 @@ class domeDisplay:
 
         # calculate neighbor dot products
         for neighbor in neighbors:
-            neighborDirection = self._mouseViewpoint[neighbor[0], neighbor[1]]
+            neighborDirection = self._mouseViewDirections[neighbor[0], neighbor[1]]
             neighbor_dps.append(dot(cameraDirection, neighborDirection))
 
         return [neighbor_dps, neighbors]
+
+
+    def _showGeometry(self, row, col):
+        """
+        Print the vectors associated with the projector pixel specified by
+        row and column.
+        """
+
+        print "self._projectorPixelDirections[row, col]"
+        print self._projectorPixelDirections[row, col]
+        print "self._incidentLightVectors[row, col]"
+        print self._incidentLightVectors[row, col]
+        print "self._mirrorRadiusVectors[row, col]"
+        print self._mirrorRadiusVectors[row, col]
+        print "self._reflectedLightVectors[row, col]"
+        print self._reflectedLightVectors[row, col]
+        print "self._mouseViewDirections[row, col]"
+        print self._mouseViewDirections[row, col]
+        import pylab
+        # plot the geometry
+        pylab.title('Geometry for projector pixel:' + str(row) + "," + str(col))
+        projectorPositionVector = [[0, self._projectorPosition[1]], [0, self._projectorPosition[2]]]
+        pylab.plot(projectorPositionVector)
+        pylab.quiver(X,Y,U,V,angles='xy',scale_units='xy',scale=1)
+
 
 
     def warpImageForDome(self, image):
@@ -449,7 +488,7 @@ def flatDisplayDirections(screenHeight, screenWidth, pixelHeight, pixelWidth,
     x = screenWidth*(columns/(pixelWidth - 1) - 0.5)
     z = -screenHeight*(rows/(pixelHeight - 1) - 0.5) + verticalOffset
 
-    # y is the distance from the camera to the screen
+    # y is the distance from the viewer to the screen
     y = distanceToScreen
     r = sqrt(x**2 + y**2 + z**2)
 
@@ -457,37 +496,52 @@ def flatDisplayDirections(screenHeight, screenWidth, pixelHeight, pixelWidth,
 
     
 
+def plotMagnitude(arrayOfVectors):
+    """
+    Plot an image of the magnitude of 3D vectors which are stored in a 2D
+    array.  The luminance of each pixel is proportional to the normalized
+    magnitude of its vector so larger magnitudes have lighter pixels.
+    """
+    dimensions = shape(arrayOfVectors)
+    #pixels = ones(dimensions, dtype=uint8)
+    magnitudes = linalg.norm(arrayOfVectors, axis=-1)
+    normalizationFactor = max(magnitudes.flat)
+    pixels = array(255*magnitudes/normalizationFactor, dtype=uint8)
+    magnitudeImage = Image.fromarray(pixels, mode='L')
+    magnitudeImage.show()
+
+
+
 ############################################################
 # Main Program Starts Here
 ############################################################
 from numpy import *
-import matplotlib
-import matplotlib.pyplot as plot
 from PIL import Image
 
-input_image = Image.open("Lenna.png")
-
-# read pixel data from image into a list
-if input_image.mode == 'RGB':
-    print "RGB image"
-    #[rows, columns] = input_image.size
-    #pixels = array(input_image)
-    print input_image.size
-else:
-    print "Unsupported image mode:", input_image.mode
-    exit()
-
-# show original image
-input_image.show()
-
-print "Creating instance of domeDisplay Class"
-dome = domeDisplay()
-print "Done initializing dome"
-
-#output_image = Image.fromarray(pixels, mode='RGB')
-output_image = dome.warpImageForDome(input_image)
-
-output_image.show()
-#output_image.save("output_file", "PNG")
+if __name__ == "__main__":
+    input_image = Image.open("Lenna.png")
+    
+    # read pixel data from image into a list
+    if input_image.mode == 'RGB':
+        print "RGB image"
+        #[rows, columns] = input_image.size
+        #pixels = array(input_image)
+        print input_image.size
+    else:
+        print "Unsupported image mode:", input_image.mode
+        exit()
+    
+    # show original image
+    input_image.show()
+    
+    print "Creating instance of domeDisplay Class"
+    dome = domeDisplay()
+    print "Done initializing dome"
+    
+    #output_image = Image.fromarray(pixels, mode='RGB')
+    output_image = dome.warpImageForDome(input_image)
+    
+    output_image.show()
+    #output_image.save("output_file", "PNG")
 
 
