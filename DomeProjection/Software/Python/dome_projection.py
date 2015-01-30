@@ -23,6 +23,9 @@ class domeDisplay:
     The dome display class describes the geometry of our dome, spherical
     mirror, and projector along with the geometry of the associated OpenGL
     virtual camera and screen.
+    All vectors in the OpenGL world are relative to the virtual camera and
+    all vectors in the dome display setup are relative to the center of the
+    hemispherical mirror.
     """
     def __init__(self,
                  screenWidth = 1,
@@ -93,25 +96,22 @@ class domeDisplay:
         self._firstProjectorImage = firstProjectorImage
         self._secondProjectorImage = secondProjectorImage
 
-        ############################################################
+        ##################################################################
         # Properties used to share results between method calls
-        ############################################################
+        ##################################################################
 
         # Start search low in the middle of the projector image 
         self._projectorPixelRow = 3*projectorPixelHeight/4
         self._projectorPixelCol = projectorPixelWidth/2
 
-        ############################################################
+        ##################################################################
         # Properties calculated from arguments
-        ############################################################
-
-        ############################################################
-        # Calculate the directions of all the OpenGL image pixels
-        # from the virtual camera's viewpoint.
-        ############################################################
+        ##################################################################
 
         """
-        All positions are relative to OpenGL's virtual camera which
+        Calculate the unit vectors (aka directions) that point from
+        OpenGL's virtual camera towards all of the OpenGL image pixels.
+        All vectors are relative to OpenGL's virtual camera which
         is looking down the positive y-axis.
         """
         self._cameraViewDirections = \
@@ -120,32 +120,32 @@ class domeDisplay:
                                   camera2screenDist)
 
 
-        ##################################################################
-        # Calculate the direction of all the projector pixel's projections
-        # from the mouse's viewpoint.
-        ##################################################################
-
         """
-        All positions are relative to the center of the hemispherical mirror.
-        The projector is on the positive y-axis (but projecting in the
-        -y direction) and its projected image is assumed to be horizontally
-        centered on the mirror.
+        Calculate the unit vectors (directions) from the mouse towards the
+        projection of each projector pixel onto the dome.  
+        All vectors used in these calculations are relative to the center of
+        the hemispherical mirror.  The projector is on the positive y-axis
+        (but projecting in the -y direction) and its projected image is assumed
+        to be horizontally centered on the mirror.
         """
 
         # Find the position of the projector's focal point.
-        self._projectorPosition = self._find_projector_focal_point()
+        projectorPosition = self._find_projector_focal_point()
+
+        if DEBUG:
+            self._projectorPosition = projectorPosition
 
 
         """
-        Calculate the directions from projector's focal point for each
-        projector pixel.  This calculation assumes secondProjectorImage has
-        the same width at the top and bottom.
+        Calculate the unit vectors (directions) from the projector's focal
+        point towards for each projector pixel.  This calculation assumes 
+        secondProjectorImage has the same width at the top and bottom.
         """
         imageWidth = secondProjectorImage[1][0] - secondProjectorImage[0][0]
         imageHeight = secondProjectorImage[0][2] - secondProjectorImage[2][2]
-        distanceToImage = (secondProjectorImage[0][1]
-                           - self._projectorPosition[1])
-        verticalOffset = secondProjectorImage[2][2] + imageHeight/2
+        distanceToImage = (secondProjectorImage[0][1] - projectorPosition[1])
+        verticalOffset = (secondProjectorImage[2][2] - projectorPosition[2]
+                          + imageHeight/2)
         self._projectorPixelDirections = \
             flatDisplayDirections(imageHeight, imageWidth,
                                   projectorPixelHeight, projectorPixelWidth,
@@ -168,9 +168,9 @@ class domeDisplay:
         and is used to find the direction of the reflected light.
         """
         # solve quadratic equation for y-component of vector 2
-        px = self._projectorPosition[0]
-        py = self._projectorPosition[1]
-        pz = self._projectorPosition[2]
+        px = projectorPosition[0]
+        py = projectorPosition[1]
+        pz = projectorPosition[2]
         pdx = self._projectorPixelDirections[:, :, 0]
         pdy = self._projectorPixelDirections[:, :, 1]
         pdz = self._projectorPixelDirections[:, :, 2]
@@ -199,7 +199,7 @@ class domeDisplay:
                     incidentLightVectors[i, j] = array([x, y, z])
                     projectorMask[i, j] = 1
 
-        mirrorRadiusVectors = self._projectorPosition + incidentLightVectors
+        mirrorRadiusVectors = projectorPosition + incidentLightVectors
         mirrorUnitNormals = mirrorRadiusVectors / mirrorRadius
 
         if DEBUG:
