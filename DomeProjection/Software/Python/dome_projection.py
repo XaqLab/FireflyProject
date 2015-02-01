@@ -18,9 +18,9 @@ average of the RGB values from the OpenGL image contributing pixels.
 
 DEBUG = True
 
-class DomeDisplay:
+class DomeProjection:
     """
-    The dome display class describes the geometry of our dome, spherical
+    The dome projection class describes the geometry of our dome, spherical
     mirror, and projector along with the geometry of the associated OpenGL
     virtual camera and screen.
     All vectors in the OpenGL world are relative to the virtual camera and

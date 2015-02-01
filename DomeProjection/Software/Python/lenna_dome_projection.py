@@ -25,7 +25,7 @@ if __name__ == "__main__":
     input_image.show()
     
     print "Creating instance of domeDisplay Class"
-    dome = DomeDisplay()
+    dome = DomeProjection()
     print "Done initializing dome"
     
     output_image = dome.warp_image_for_dome(input_image)
