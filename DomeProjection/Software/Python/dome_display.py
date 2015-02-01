@@ -211,13 +211,11 @@ class DomeDisplay:
         to be horizontally centered on the mirror.
         """
 
-
         # Find the position of the projector's focal point.
         projector_focal_point = self._find_projector_focal_point()
 
         if DEBUG:
             self._projector_focal_point = projector_focal_point
-
 
         """
         Calculate the unit vectors (directions) from the projector's focal
@@ -255,7 +253,6 @@ class DomeDisplay:
 
         # Flip the sign of the x-values because projection is in -y direction
         self._projector_pixel_directions *= array([-1, 1, 1])
-
 
         """
         Complete the triangle consisting of: 
@@ -574,39 +571,5 @@ def plot_magnitude(array_of_vectors):
     pixels = array(255*magnitudes/normalizationFactor, dtype=uint8)
     magnitude_image = Image.fromarray(pixels, mode='L')
     magnitude_image.show()
-
-
-
-############################################################
-# Main Program Starts Here
-############################################################
-from numpy import *
-from PIL import Image
-
-if __name__ == "__main__":
-    input_image = Image.open("Lenna.png")
-    
-    # read pixel data from image into a list
-    if input_image.mode == 'RGB':
-        print "RGB image"
-        #[rows, columns] = input_image.size
-        #pixels = array(input_image)
-        print input_image.size
-    else:
-        print "Unsupported image mode:", input_image.mode
-        exit()
-    
-    # show original image
-    input_image.show()
-    
-    print "Creating instance of domeDisplay Class"
-    dome = DomeDisplay()
-    print "Done initializing dome"
-    
-    #output_image = Image.fromarray(pixels, mode='RGB')
-    output_image = dome.warp_image_for_dome(input_image)
-    
-    output_image.show()
-    #output_image.save("output_file", "PNG")
 
 
