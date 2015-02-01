@@ -12,7 +12,7 @@ projector pixel are calculated from pixels in the OpenGL image such that the
 pixels in the OpenGL image and the corresponding region seen by the animal are
 in the same direction.  A mapping from projector pixels to the animal's
 viewpoint is used to determine which pixels in the OpenGL image contribute to
-each projector pixel.  The RGB values for each projector pixel are the 
+each projector pixel.  The RGB values for each projector pixel are the
 average of the RGB values from the OpenGL image contributing pixels.
 """
 
@@ -53,11 +53,11 @@ class DomeProjection:
         """
         Parameters:
         ----------------------------
-        @param screen_height: 
+        @param screen_height:
             The height of the OpenGL screen in arbitrary units.
-        @param screen_width: 
+        @param screen_width:
             The width of the OpenGL screen in arbitrary units.
-        @param distance_to_screen: 
+        @param distance_to_screen:
             The distance from OpenGL's virtual camera to the OpenGL screen in
             arbitrary units.
         @param image_pixel_height:
@@ -109,8 +109,8 @@ class DomeProjection:
         # Properties used to share results between method calls
         #######################################################################
 
-        # Start search low in the middle of the projector image 
-        self._projector_pixel_row = 3*projector_pixel_height/4
+        # Start search in the middle of the projector's bottom row of pixels
+        self._projector_pixel_row = projector_pixel_height - 1
         self._projector_pixel_col = projector_pixel_width/2
 
         #######################################################################
@@ -128,49 +128,23 @@ class DomeProjection:
                                     image_pixel_height, image_pixel_width,
                                     distance_to_screen)
 
-
         """
         Calculate the unit vectors (directions) from the animal inside the dome
         towards the projection of each projector pixel on to the dome.
         """
         self._animal_view_directions = self._dome_display_directions()
 
-
         """
         For each OpenGL image pixel use the directions calculated above
         to find the projector pixel with the closest direction.  Then add that
         OpenGL pixel to the projector pixel's list of contributing pixels.
         """
-
-        # This 2D list of lists contains the list of OpenGL pixels
-        # that contribute to each projector pixel.
-        self._contributing_pixels = \
-            [[[] for i in range(self._projector_pixel_width)]
-             for j in range(self._projector_pixel_height)]
-        row = 0
-        while row < self._image_pixel_height:
-            for col in range(self._image_pixel_width):
-                """
-                For each OpenGL image pixel, determine which projector
-                pixel has the closest direction.  
-                """
-                [r, c] = self._find_closest_projector_pixel(row, col) 
-                self._contributing_pixels[r][c].append([row, col])
-            row = row + 1
-            for col in range(self._image_pixel_width - 1, -1, -1):
-                """
-                Go through the pixels in a serpentine pattern so that the
-                current pixel is always close to the last pixel.  This way the
-                search algorithm can use the last result as its starting point.
-                """
-                [r, c] = self._find_closest_projector_pixel(row, col) 
-                self._contributing_pixels[r][c].append([row, col])
-            row = row + 1
+        self._contributing_pixels = self._find_contributing_pixels()
 
 
-    ##########################################################################
+    ###########################################################################
     # Class methods
-    ##########################################################################
+    ###########################################################################
 
     def _find_projector_focal_point(self):
         """
@@ -191,7 +165,7 @@ class DomeProjection:
         lower_z1 = self._first_projector_image[2][2]
         lower_z2 = self._second_projector_image[2][2]
         lowerSlope = (lower_z2 - lower_z1)/(y2 - y1)
-        
+
         # find y and z where the lines intersect
         a = array([[upperSlope, -1], [lowerSlope, -1]])
         b = array([upperSlope*y1 - upper_z1, lowerSlope*y1 - lower_z1])
@@ -255,7 +229,7 @@ class DomeProjection:
         self._projector_pixel_directions *= array([-1, 1, 1])
 
         """
-        Complete the triangle consisting of: 
+        Complete the triangle consisting of:
             1.  the vector from the center of the mirror to the projector's
                 focal point (completely specified)
             2.  the vector from the projector's focal point to the mirror for
@@ -297,17 +271,17 @@ class DomeProjection:
                     z = r*pdz[i, j]
                     incident_light_vectors[i, j] = array([x, y, z])
                     projector_mask[i, j] = 1
-    
+
         mirror_radius_vectors = projector_focal_point + incident_light_vectors
         mirrorUnitNormals = mirror_radius_vectors / self._mirror_radius
-    
+
         if DEBUG:
             # create properties for intermediate results
             self._projector_mask = projector_mask
             self._incident_light_vectors = incident_light_vectors
             self._mirror_radius_vectors = mirror_radius_vectors
             self._mirrorUnitNormals = mirrorUnitNormals
-    
+
         """
         Use the incident_light_vectors and the mirrorUnitNormals to find the
         direction of the reflected light.
@@ -323,10 +297,10 @@ class DomeProjection:
                         + incident_light_vectors[i, j]
                     reflectedLightDirections[i, j] = \
                         reflectedLightVector/linalg.norm(reflectedLightVector)
-    
+
         if DEBUG:
             self._reflectedLightDirections = reflectedLightDirections
-    
+
         """
         Complete the triangle again to find the reflected light vectors.
         The known vector is from the center of the dome to the reflection
@@ -355,10 +329,10 @@ class DomeProjection:
                     y = r*rldy[i, j]
                     z = r*rldz[i, j]
                     reflected_light_vectors[i, j] = [x, y, z]
-    
+
         if DEBUG:
             self._reflected_light_vectors = reflected_light_vectors
-    
+
         """
         Now use the vectors of the reflected light, reflection position on the
         mirror, and animal position to find the animal's view point
@@ -375,9 +349,45 @@ class DomeProjection:
                                         - self._animal_position)
                     magnitude = linalg.norm(animal_view_vector)
                     animal_view_directions[i, j] = animal_view_vector/magnitude
-    
+
         return animal_view_directions
-        
+
+
+    def _find_contributing_pixels(self):
+        """
+        For each OpenGL image pixel use the directions for the camera view
+        and the animal view to find the projector pixel with the closest
+        direction.  Then add that OpenGL pixel to the projector pixel's list
+        of contributing pixels.
+        """
+
+        # This 2D list of lists contains the list of OpenGL pixels
+        # that contribute to each projector pixel.
+        self._contributing_pixels = \
+            [[[] for i in range(self._projector_pixel_width)]
+             for j in range(self._projector_pixel_height)]
+        row = 0
+        while row < self._image_pixel_height:
+            for col in range(self._image_pixel_width):
+                """
+                For each OpenGL image pixel, determine which projector
+                pixel has the closest direction.
+                """
+                [r, c] = self._find_closest_projector_pixel(row, col)
+                self._contributing_pixels[r][c].append([row, col])
+            row = row + 1
+            for col in range(self._image_pixel_width - 1, -1, -1):
+                """
+                Go through the pixels in a serpentine pattern so that the
+                current pixel is always close to the last pixel.  This way the
+                search algorithm can use the last result as its starting point.
+                """
+                [r, c] = self._find_closest_projector_pixel(row, col)
+                self._contributing_pixels[r][c].append([row, col])
+            row = row + 1
+
+        return self._contributing_pixels
+
 
     def _find_closest_projector_pixel(self, row, col):
         """
@@ -392,6 +402,12 @@ class DomeProjection:
         # Start with the last projector pixel
         r = self._projector_pixel_row
         c = self._projector_pixel_col
+
+        while self._projector_mask[r, c] == 0:
+            # if the pixel doesn't hit the mirror, find one that does
+            r = randint(self._projector_pixel_height)
+            c = randint(self._projector_pixel_width)
+
         animalDirection = self._animal_view_directions[r, c]
 
         # Calculate dot product of this OpenGL pixel
@@ -405,7 +421,7 @@ class DomeProjection:
 
         while max(neighbor_dps) > dp:
             """
-            If the dot product with one of the neighboring projector pixels is 
+            If the dot product with one of the neighboring projector pixels is
             larger then update r and c to that pixel and check its neighbors.
             Repeat until all neighbors have smaller (or equal) dot products.
             """
@@ -538,7 +554,7 @@ def flat_display_directions(screen_height, screen_width, pixel_height,
     and the positive z-axis is up.
     """
     # Make matrices of projector row and column values
-    rows = array([[float(i)]*pixel_width for i in 
+    rows = array([[float(i)]*pixel_width for i in
                   range(pixel_height)])
     columns = array([[float(i)]*pixel_height for i in
                      range(pixel_width)]).T
@@ -557,7 +573,7 @@ def flat_display_directions(screen_height, screen_width, pixel_height,
 
     return dstack([x/r, y/r, z/r])
 
-    
+
 def plot_magnitude(array_of_vectors):
     """
     Plot an image of the magnitude of 3D vectors which are stored in a 2D
