@@ -141,45 +141,16 @@ class DomeProjection:
         self._animal_view_directions = self._dome_display_directions()
 
         """
-        For each OpenGL image pixel use the directions calculated above
-        to find the projector pixel with the closest direction.  Then add that
-        OpenGL pixel to the projector pixel's list of contributing pixels.
+        Build lists of the OpenGL image pixels that contribute to each
+        projector pixel.
         """
-        self._contributing_pixels = self._find_contributing_pixels()
+        #self._contributing_pixels = self._find_contributing_pixels()
+        self._contributing_pixels = self._calc_contributing_pixels()
 
 
     ###########################################################################
     # Class methods
     ###########################################################################
-
-    def _find_projector_focal_point(self):
-        """
-        Find the position of the projector's focal point.  The projector
-        image is horizontally centered on the mirror so the x-component
-        of the focal point's position is zero.  Find the intersection point
-        of the lines along the top and bottom of the projected light to get
-        the focal point's y and z coordinates.
-        """
-        # calculate slope of line along top of projected light
-        upper_z1 = self._first_projector_image[0][2]
-        upper_z2 = self._second_projector_image[0][2]
-        y1 = self._first_projector_image[0][1]
-        y2 = self._second_projector_image[0][1]
-        upperSlope = (upper_z2 - upper_z1)/(y2 - y1)
-
-        # calculate slope of line along bottom of projected light
-        lower_z1 = self._first_projector_image[2][2]
-        lower_z2 = self._second_projector_image[2][2]
-        lowerSlope = (lower_z2 - lower_z1)/(y2 - y1)
-
-        # find y and z where the lines intersect
-        a = array([[upperSlope, -1], [lowerSlope, -1]])
-        b = array([upperSlope*y1 - upper_z1, lowerSlope*y1 - lower_z1])
-        [y, z] = linalg.solve(a, b)
-        projector_focal_point = array([0, y, z])
-
-        return projector_focal_point
-
 
     def _dome_display_directions(self):
         """
@@ -191,8 +162,8 @@ class DomeProjection:
         to be horizontally centered on the mirror.
         """
 
-        # Find the position of the projector's focal point.
-        projector_focal_point = self._find_projector_focal_point()
+        # Calculate the position of the projector's focal point.
+        projector_focal_point = self._calc_projector_focal_point()
 
         if DEBUG:
             self._projector_focal_point = projector_focal_point
@@ -244,7 +215,7 @@ class DomeProjection:
                 mirror where the vector in 2 hits the mirror (known length,
                 unknown direction)
         Vector 3 is normal to the mirror's surface at the point of reflection
-        and is used to find the direction of the reflected light.
+        and is used to calculate the direction of the reflected light.
         """
         # solve quadratic equation for y-component of vector 2
         px = projector_focal_point[0]
@@ -263,17 +234,18 @@ class DomeProjection:
         for i in range(self._projector_pixel_height):
             for j in range(self._projector_pixel_width):
                 """
-                The vector will intersect the sphere twice.  Find the root
+                The vector will intersect the sphere twice.  Pick the root
                 for the shorter vector.
                 """
-                d = sqrt(b[i, j]**2 - 4*a[i, j]*c)
-                r = min([(-b[i, j] + d) / (2*a[i, j]),
-                         (-b[i, j] - d) / (2*a[i, j])])
-                if imag(r) == 0:
+                d_squared = b[i, j]**2 - 4*a[i, j]*c
+                if d_squared >= 0:
                     """
                     For projector pixels that hit the mirror, calculate the
                     incident light vector and set the mask to one.
                     """
+                    d = sqrt(d_squared)
+                    r = min([(-b[i, j] + d) / (2*a[i, j]),
+                         (-b[i, j] - d) / (2*a[i, j])])
                     x = r*pdx[i, j]
                     y = r*pdy[i, j]
                     z = r*pdz[i, j]
@@ -291,8 +263,8 @@ class DomeProjection:
             self._mirrorUnitNormals = mirrorUnitNormals
 
         """
-        Use the incident_light_vectors and the mirrorUnitNormals to find the
-        direction of the reflected light.
+        Use the incident_light_vectors and the mirrorUnitNormals to calculate
+        the direction of the reflected light.
         """
         reflectedLightDirections = zeros([self._projector_pixel_height,
                                           self._projector_pixel_width, 3])
@@ -310,7 +282,7 @@ class DomeProjection:
             self._reflectedLightDirections = reflectedLightDirections
 
         """
-        Complete the triangle again to find the reflected light vectors.
+        Complete the triangle again to get the reflected light vectors.
         The known vector is from the center of the dome to the reflection
         point on the mirror (calculated as mirror_radius_vectors - dome_center)
         and the length of the vector with unknown direction is the dome radius.
@@ -345,7 +317,8 @@ class DomeProjection:
 
         """
         Now use the vectors of the reflected light, reflection position on the
-        mirror, and animal position to find the animal's view point
+        mirror, and animal position to calculate the animal's viewing direction
+        for each projector pixel.
         """
         animal_view_directions = zeros([self._projector_pixel_height,
                                         self._projector_pixel_width, 3])
@@ -363,6 +336,66 @@ class DomeProjection:
         return animal_view_directions
 
 
+    def _calc_projector_focal_point(self):
+        """
+        Calculate the position of the projector's focal point.  The projector
+        image is horizontally centered on the mirror so the x-component
+        of the focal point's position is zero.  Calculate the intersection
+        point of the lines along the top and bottom of the projected light to
+        get the focal point's y and z coordinates.
+        """
+        # calculate slope of line along top of projected light
+        upper_z1 = self._first_projector_image[0][2]
+        upper_z2 = self._second_projector_image[0][2]
+        y1 = self._first_projector_image[0][1]
+        y2 = self._second_projector_image[0][1]
+        upperSlope = (upper_z2 - upper_z1)/(y2 - y1)
+
+        # calculate slope of line along bottom of projected light
+        lower_z1 = self._first_projector_image[2][2]
+        lower_z2 = self._second_projector_image[2][2]
+        lowerSlope = (lower_z2 - lower_z1)/(y2 - y1)
+
+        # calculate y and z where the lines intersect
+        a = array([[upperSlope, -1], [lowerSlope, -1]])
+        b = array([upperSlope*y1 - upper_z1, lowerSlope*y1 - lower_z1])
+        [y, z] = linalg.solve(a, b)
+        projector_focal_point = array([0, y, z])
+
+        return projector_focal_point
+
+
+    def _calc_contributing_pixels(self):
+        """
+        Use the direction for each projector pixel to calculate the nearest
+        pixel in the OpenGL image and use its RGB values for the projector
+        pixel.  
+        """
+
+        # This 2D list of lists contains the list of OpenGL pixels
+        # that contribute to each projector pixel.
+        contributing_pixels = \
+            [[[] for i in range(self._projector_pixel_width)]
+             for j in range(self._projector_pixel_height)]
+        for row in range(self._projector_pixel_height):
+            for col in range(self._projector_pixel_width):
+                if self._projector_mask[row, col] == 1:
+                    """
+                    For each projector pixel that hits the mirror, determine
+                    which OpenGL image pixel has the closest direction.
+                    """
+                    direction = self._animal_view_directions[row, col]
+                    r = int((self._image_pixel_height - 1)
+                            * (1 - (direction[2] / self._screen_height) - 0.5))
+                    c = int((self._image_pixel_width - 1)
+                            * (direction[0] / self._screen_width + 0.5))
+                    if (r >= 0 and r < self._image_pixel_height
+                        and c >= 0 and c < self._image_pixel_width):
+                        contributing_pixels[row][col].append([r, c])
+
+        return contributing_pixels
+
+
     def _find_contributing_pixels(self):
         """
         For each OpenGL image pixel use the directions for the camera view
@@ -373,7 +406,7 @@ class DomeProjection:
 
         # This 2D list of lists contains the list of OpenGL pixels
         # that contribute to each projector pixel.
-        self._contributing_pixels = \
+        contributing_pixels = \
             [[[] for i in range(self._projector_pixel_width)]
              for j in range(self._projector_pixel_height)]
         row = 0
@@ -384,7 +417,7 @@ class DomeProjection:
                 pixel has the closest direction.
                 """
                 [r, c] = self._find_closest_projector_pixel(row, col)
-                self._contributing_pixels[r][c].append([row, col])
+                contributing_pixels[r][c].append([row, col])
             row = row + 1
             for col in range(self._image_pixel_width - 1, -1, -1):
                 """
@@ -393,10 +426,10 @@ class DomeProjection:
                 search algorithm can use the last result as its starting point.
                 """
                 [r, c] = self._find_closest_projector_pixel(row, col)
-                self._contributing_pixels[r][c].append([row, col])
+                contributing_pixels[r][c].append([row, col])
             row = row + 1
 
-        return self._contributing_pixels
+        return contributing_pixels
 
 
     def _find_closest_projector_pixel(self, row, col):

@@ -31,6 +31,6 @@ if __name__ == "__main__":
     output_image = dome.warp_image_for_dome(input_image)
     
     output_image.show()
-    #output_image.save("lenna_warped.png", "PNG")
+    output_image.save("lenna_warped.png", "PNG")
 
 
