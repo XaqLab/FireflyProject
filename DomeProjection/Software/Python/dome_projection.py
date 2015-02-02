@@ -12,8 +12,7 @@ projector pixel are calculated from pixels in the OpenGL image such that the
 pixels in the OpenGL image and the corresponding region seen by the animal are
 in the same direction.  A mapping from projector pixels to the animal's
 viewpoint is used to determine which pixels in the OpenGL image contribute to
-each projector pixel.  The RGB values for each projector pixel are the
-average of the RGB values from the OpenGL image contributing pixels.
+each projector pixel.  
 """
 
 DEBUG = True
@@ -37,10 +36,10 @@ class DomeProjection:
                  screen_height = 1,
                  screen_width = 1,
                  distance_to_screen = 0.5,
-                 #image_pixel_height = 720,
-                 #image_pixel_width = 1280,
-                 image_pixel_height = 512,
-                 image_pixel_width = 512,
+                 image_pixel_height = 720,
+                 image_pixel_width = 1280,
+                 #image_pixel_height = 512,
+                 #image_pixel_width = 512,
                  projector_pixel_height = 720,
                  projector_pixel_width = 1280,
                  first_projector_image = [[-0.09, 0.43, 0.18],
@@ -387,17 +386,24 @@ class DomeProjection:
                     which OpenGL image pixel has the closest direction.
                     """
                     direction = self._animal_view_directions[row, col]
-                    # calculate the magnitude required to hit the screen
-                    magnitude = self._distance_to_screen / direction[1]
-                    z_component = magnitude * direction[2]
-                    x_component = magnitude * direction[0]
-                    r = int((self._image_pixel_height - 1)
-                            * (1 - z_component / self._screen_height - 0.5))
-                    c = int((self._image_pixel_width - 1)
-                            * (x_component / self._screen_width + 0.5))
-                    if (r >= 0 and r < self._image_pixel_height
-                        and c >= 0 and c < self._image_pixel_width):
-                        contributing_pixels[row][col].append([r, c])
+                    if direction[1] > 0:
+                        """
+                        limit ourselves to pixels that project in front of
+                        the animal for now
+                        """
+                        # calculate the magnitude required to hit the screen
+                        magnitude = self._distance_to_screen / direction[1]
+                        z_component = magnitude * direction[2]
+                        x_component = magnitude * direction[0]
+                        # calculate row and column of closest OpenGL pixel
+                        r = int((self._image_pixel_height - 1)
+                                * (1 - z_component / self._screen_height - 0.5))
+                        c = int((self._image_pixel_width - 1)
+                                * (x_component / self._screen_width + 0.5))
+                        # make sure the pixel is inside the OpenGL image and the 
+                        if (r >= 0 and r < self._image_pixel_height
+                            and c >= 0 and c < self._image_pixel_width):
+                            contributing_pixels[row][col].append([r, c])
 
         return contributing_pixels
 
