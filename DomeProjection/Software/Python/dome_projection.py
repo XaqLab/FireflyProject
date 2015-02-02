@@ -36,7 +36,9 @@ class DomeProjection:
     def __init__(self,
                  screen_height = 1,
                  screen_width = 1,
-                 distance_to_screen = 2.0,
+                 distance_to_screen = 0.5,
+                 #image_pixel_height = 720,
+                 #image_pixel_width = 1280,
                  image_pixel_height = 512,
                  image_pixel_width = 512,
                  projector_pixel_height = 720,
@@ -385,10 +387,14 @@ class DomeProjection:
                     which OpenGL image pixel has the closest direction.
                     """
                     direction = self._animal_view_directions[row, col]
+                    # calculate the magnitude required to hit the screen
+                    magnitude = self._distance_to_screen / direction[1]
+                    z_component = magnitude * direction[2]
+                    x_component = magnitude * direction[0]
                     r = int((self._image_pixel_height - 1)
-                            * (1 - (direction[2] / self._screen_height) - 0.5))
+                            * (1 - z_component / self._screen_height - 0.5))
                     c = int((self._image_pixel_width - 1)
-                            * (direction[0] / self._screen_width + 0.5))
+                            * (x_component / self._screen_width + 0.5))
                     if (r >= 0 and r < self._image_pixel_height
                         and c >= 0 and c < self._image_pixel_width):
                         contributing_pixels[row][col].append([r, c])
