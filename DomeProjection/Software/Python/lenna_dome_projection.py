@@ -4,8 +4,8 @@
 ############################################################
 # Main Program Starts Here
 ############################################################
-from numpy import *
 from PIL import Image
+from dome_projection import DomeProjection
 
 if __name__ == "__main__":
     input_image = Image.open("Lenna.png")
@@ -24,7 +24,7 @@ if __name__ == "__main__":
     # show original image
     input_image.show()
     
-    print "Creating instance of domeDisplay Class"
+    print "Creating instance of DomeProjection Class"
     dome = DomeProjection()
     print "Done initializing dome"
     

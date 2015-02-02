@@ -18,6 +18,12 @@ average of the RGB values from the OpenGL image contributing pixels.
 
 DEBUG = True
 
+from numpy import array, ones, zeros, dstack, linalg, dot
+from numpy import sqrt, imag
+from numpy import uint8
+from random import randint
+from PIL import Image
+
 class DomeProjection:
     """
     The dome projection class describes the geometry of our dome, spherical
@@ -247,9 +253,9 @@ class DomeProjection:
         pdx = self._projector_pixel_directions[:, :, 0]
         pdy = self._projector_pixel_directions[:, :, 1]
         pdz = self._projector_pixel_directions[:, :, 2]
-        a0 = px**2 + py**2 + pz**2 - self._mirror_radius**2
-        a1 = 2*px*pdx + 2*py*pdy + 2*pz*pdz
-        a2 = pdx**2 + pdy**2 + pdz**2
+        a = pdx**2 + pdy**2 + pdz**2
+        b = 2*px*pdx + 2*py*pdy + 2*pz*pdz
+        c = px**2 + py**2 + pz**2 - self._mirror_radius**2
         projector_mask = zeros([self._projector_pixel_height,
                                 self._projector_pixel_width], dtype=int)
         incident_light_vectors = zeros([self._projector_pixel_height,
@@ -260,7 +266,9 @@ class DomeProjection:
                 The vector will intersect the sphere twice.  Find the root
                 for the shorter vector.
                 """
-                r = min(roots(array([a2[i, j], a1[i, j], a0])))
+                d = sqrt(b[i, j]**2 - 4*a[i, j]*c)
+                r = min([(-b[i, j] + d) / (2*a[i, j]),
+                         (-b[i, j] - d) / (2*a[i, j])])
                 if imag(r) == 0:
                     """
                     For projector pixels that hit the mirror, calculate the
@@ -314,9 +322,9 @@ class DomeProjection:
         rldx = reflectedLightDirections[:, :, 0]
         rldy = reflectedLightDirections[:, :, 1]
         rldz = reflectedLightDirections[:, :, 2]
-        a0 = rpx**2 + rpy**2 + rpz**2 - self._dome_radius**2
-        a1 = 2*rpx*rldx + 2*rpy*rldy + 2*rpz*rldz
-        a2 = rldx**2 + rldy**2 + rldz**2
+        a = rldx**2 + rldy**2 + rldz**2
+        b = 2*rpx*rldx + 2*rpy*rldy + 2*rpz*rldz
+        c = rpx**2 + rpy**2 + rpz**2 - self._dome_radius**2
         reflected_light_vectors = zeros([self._projector_pixel_height,
                                          self._projector_pixel_width, 3])
         for i in range(self._projector_pixel_height):
@@ -324,7 +332,9 @@ class DomeProjection:
                 if projector_mask[i, j] == 1:
                     # For projector pixels that hit the mirror,
                     # take the solution with positive vector length.
-                    r = max(roots(array([a2[i, j], a1[i, j], a0[i, j]])))
+                    d = sqrt(b[i, j]**2 - 4*a[i, j]*c[i, j])
+                    r = max([(-b[i, j] + d) / (2*a[i, j]),
+                             (-b[i, j] - d) / (2*a[i, j])])
                     x = r*rldx[i, j]
                     y = r*rldy[i, j]
                     z = r*rldz[i, j]
@@ -525,7 +535,7 @@ class DomeProjection:
 
         pixels = array(image)
         warped_pixels = zeros([self._projector_pixel_height,
-                              self._projector_pixel_width, 3], dtype=uint8)
+                               self._projector_pixel_width, 3], dtype=uint8)
         for row in range(self._projector_pixel_height):
             for col in range(self._projector_pixel_width):
                 pixel_value = zeros(3)
