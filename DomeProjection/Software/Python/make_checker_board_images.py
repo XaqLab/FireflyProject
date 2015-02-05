@@ -41,7 +41,11 @@ if __name__ == "__main__":
     # total pixels: 1280 by 720
     #checker_board_image = create_checker_board([20, 20], [36, 64])
     #checker_board_image.save("checker_board_20_by_20.png")
-    checker_board_image = create_checker_board([1, 1], [720, 1280])
-    checker_board_image.save("checker_board_1_by_1.png")
+    #checker_board_image = create_checker_board([1, 1], [720, 1280])
+    #checker_board_image.save("checker_board_1_by_1.png")
+    #checker_board_image = create_checker_board([2, 2], [360, 640])
+    #checker_board_image.save("checker_board_2_by_2.png")
+    checker_board_image = create_checker_board([4, 4], [180, 320])
+    checker_board_image.save("checker_board_4_by_4.png")
 
 
