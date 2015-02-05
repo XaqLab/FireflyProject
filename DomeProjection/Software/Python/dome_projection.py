@@ -17,6 +17,10 @@ each projector pixel.
 
 DEBUG = True
 
+if DEBUG:
+    from numpy import arctan2, arccos, pi, where
+    import matplotlib.pyplot as plot
+
 from numpy import array, ones, zeros, dstack, linalg, dot
 from numpy import sqrt, imag
 from numpy import uint8
@@ -36,22 +40,19 @@ class DomeProjection:
                  screen_height = 1,
                  screen_width = 1,
                  distance_to_screen = 0.5,
-                 image_pixel_height = 720,
-                 image_pixel_width = 1280,
-                 #image_pixel_height = 512,
-                 #image_pixel_width = 512,
-                 projector_pixel_height = 720,
-                 projector_pixel_width = 1280,
-                 first_projector_image = [[-0.09, 0.43, 0.18],
-                                          [0.09, 0.43, 0.18],
-                                          [0.09, 0.43, 0.04],
-                                          [-0.09, 0.43, 0.04]],
-                 second_projector_image = [[-0.11, 0.36, 0.21],
-                                           [0.11, 0.36, 0.21],
-                                           [0.11, 0.36, 0.04],
-                                           [-0.11, 0.36, 0.04]],
-                 #mirror_radius = 0.2286,
-                 mirror_radius = 0.3,
+                 image_pixel_height = 100,
+                 image_pixel_width = 100,
+                 projector_pixel_height = 100,
+                 projector_pixel_width = 100,
+                 first_projector_image = [[-0.080, 0.440, 0.137],
+                                          [0.080, 0.440, 0.137],
+                                          [0.080, 0.440, 0.043],
+                                          [-0.080, 0.440, 0.043]],
+                 second_projector_image = [[-0.115, 0.265, 0.186],
+                                           [0.115, 0.265, 0.186],
+                                           [0.115, 0.265, 0.054],
+                                           [-0.115, 0.265, 0.054]],
+                 mirror_radius = 0.2286,
                  dome_center = [0, 0.14, 0.42],
                  dome_radius = 0.64,
                  animal_position = [0, 0, 0.5]
@@ -135,6 +136,24 @@ class DomeProjection:
                                     image_pixel_height, image_pixel_width,
                                     distance_to_screen)
 
+        if DEBUG:
+            print "OpenGL's virtual camera has a horizontal field of view of:"
+            left_x = self._camera_view_directions[0, 0, 0]
+            left_y = self._camera_view_directions[0, 0, 1]
+            right_x = self._camera_view_directions[0, image_pixel_width - 1, 0]
+            right_y = self._camera_view_directions[0, image_pixel_width - 1, 1]
+            left_theta = 180/pi*arctan2(left_y, left_x)
+            right_theta = 180/pi*arctan2(right_y, right_x)
+            print left_theta, "-", right_theta, "=", left_theta - right_theta
+            print "OpenGL's virtual camera has a vertical field of view of:"
+            bottom_y = self._camera_view_directions[image_pixel_height - 1, 0, 1]
+            bottom_z = self._camera_view_directions[image_pixel_height - 1, 0, 2]
+            top_y = self._camera_view_directions[0, 0, 1]
+            top_z = self._camera_view_directions[0, 0, 2]
+            bottom_phi = 180/pi*arctan2(bottom_y, bottom_z)
+            top_phi = 180/pi*arctan2(top_y, top_z)
+            print bottom_phi, "-", top_phi, "=", bottom_phi - top_phi
+
         """
         Calculate the unit vectors (directions) from the animal inside the dome
         towards the projection of each projector pixel on to the dome.
@@ -147,6 +166,59 @@ class DomeProjection:
         """
         #self._contributing_pixels = self._find_contributing_pixels()
         self._contributing_pixels = self._calc_contributing_pixels()
+
+        if DEBUG:
+            print "The animal in the dome has a horizontal field of view of:"
+            num_contributing_pixels = \
+                    array([[len(self._contributing_pixels[row][col])
+                            for col in range(self._projector_pixel_width)]
+                           for row in range(self._projector_pixel_height)])
+            [non_empty_rows, non_empty_cols] = num_contributing_pixels.nonzero()
+            '''
+            what I want here is to find the left most pixel (row and col) and
+            the right most pixel (row and col)
+            '''
+
+            left_most_pixel = \
+                    (non_empty_rows[where(non_empty_cols ==
+                                          min(non_empty_cols))[0][0]],
+                     min(non_empty_cols))
+            print "left most pixel:", left_most_pixel
+
+            right_most_pixel = \
+                    (non_empty_rows[where(non_empty_cols ==
+                                          max(non_empty_cols))[0][0]],
+                     max(non_empty_cols))
+            print "right most pixel:", right_most_pixel
+
+            upper_most_pixel = \
+                    (min(non_empty_rows),
+                    non_empty_cols[where(non_empty_rows ==
+                                         min(non_empty_rows))[0][0]])
+            print "upper most pixel:", upper_most_pixel
+
+            lower_most_pixel = \
+                    (max(non_empty_rows),
+                    non_empty_cols[where(non_empty_rows ==
+                                         max(non_empty_rows))[0][0]])
+            print "lower most pixel:", lower_most_pixel
+
+            left_x = self._animal_view_directions[left_most_pixel][0]
+            left_y = self._animal_view_directions[left_most_pixel][1]
+            right_x = self._animal_view_directions[right_most_pixel][0]
+            right_y = self._animal_view_directions[right_most_pixel][1]
+            left_theta = 180/pi*arctan2(left_y, left_x)
+            right_theta = 180/pi*arctan2(right_y, right_x)
+            print right_theta, "-", left_theta, "=", right_theta - left_theta
+            print "The animal in the dome has a vertical field of view of:"
+            bottom_y = self._animal_view_directions[lower_most_pixel][1]
+            bottom_z = self._animal_view_directions[lower_most_pixel][2]
+            top_y = self._animal_view_directions[upper_most_pixel][1]
+
+            top_z = self._animal_view_directions[upper_most_pixel][2]
+            bottom_phi = 180/pi*arctan2(bottom_y, bottom_z)
+            top_phi = 180/pi*arctan2(top_y, top_z)
+            print bottom_phi, "-", top_phi, "=", bottom_phi - top_phi
 
 
     ###########################################################################
@@ -543,30 +615,31 @@ class DomeProjection:
         y_image.show()
 
 
-    def _show_geometry(self, row, col):
+    def _show_geometry(self):
         """
-        Print the vectors associated with the projector pixel specified by
-        row and column.
+        Plot the outline of the OpenGL image, the mirror, the warped image, and
+        a projection of the animal's view onto a screen that is the same size
+        and distance from the animal as the OpenGL screen.
         """
 
-        print "self._projector_pixel_directions[row, col]"
-        print self._projector_pixel_directions[row, col]
-        print "self._incident_light_vectors[row, col]"
-        print self._incident_light_vectors[row, col]
-        print "self._mirror_radius_vectors[row, col]"
-        print self._mirror_radius_vectors[row, col]
-        print "self._reflected_light_vectors[row, col]"
-        print self._reflected_light_vectors[row, col]
-        print "self._animal_view_directions[row, col]"
-        print self._animal_view_directions[row, col]
-        import pylab
-        # plot the geometry
-        pylab.title('Geometry for projector pixel:' + str(row) + "," + str(col))
-        projector_focal_point_vector = \
-            [[0, self._projector_focal_point[1]],
-             [0, self._projector_focal_point[2]]]
-        pylab.plot(projector_focal_point_vector)
-        pylab.quiver(X,Y,U,V,angles='xy',scale_units='xy',scale=1)
+        # plot the OpenGL image outline in the x-z plane
+        x = [-self._screen_width/2.0, self._screen_width/2.0,
+             self._screen_width/2.0, -self._screen_width/2.0,
+            -self._screen_width/2.0]
+        z = [self._screen_height/2.0, self._screen_height/2.0,
+             -self._screen_height/2.0, -self._screen_height/2.0,
+             self._screen_height/2.0]
+
+        fig = plot.figure(1)
+        axes = plot.subplot(111)
+        axes.set_title('Geometry for dome projection')
+        axes.set_xlim([-1, 1])
+        axes.set_ylim([-1, 1])
+        axes.plot(x, z)
+
+        # plot the OpenGL image outline in the x-z plane
+        plot.show()
+
 
 
     def warp_image_for_dome(self, image):
