@@ -24,7 +24,10 @@ else:
 input_image.show()
 
 print "Creating instance of DomeProjection Class"
-dome = DomeProjection(image_pixel_width=512,
+dome = DomeProjection(screen_height = 1.0,
+                      screen_width = 1.0,
+                      distance_to_screen = 0.5,
+                      image_pixel_width=512,
                       image_pixel_height=512,
                       projector_pixel_width=1280,
                       projector_pixel_height=720)
