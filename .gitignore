@@ -1,0 +1,19 @@
+# I use junk folders for stuff I don't want to delete but doesn't need versioning
+junk
+DomeProjection/junk
+DomeProjection/Python/junk
+
+# Ignore directories that contain stuff I never edit
+proposal_docs
+white_board_notes
+video
+jians_code
+DomeProjection/references
+DomeProjection/s2plot
+
+# Ignore directories that contain a lot of images that I don't want to track
+DomeProjection/Python/three_camera_demo
+DomeProjection/Python/test_images
+
+# Ignore the Theory directory for now since I'm not actively developing there
+Theory
