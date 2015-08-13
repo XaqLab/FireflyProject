@@ -14,6 +14,7 @@ DomeProjection/hardware_documentation
 DomeProjection/notes_from_xaq
 
 # Ignore directories that contain a lot of images that I don't want to track
+DomeProjection/Python/calibration
 DomeProjection/Python/three_camera_demo
 DomeProjection/Python/test_images
 
