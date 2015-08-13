@@ -10,6 +10,8 @@ video
 jians_code
 DomeProjection/references
 DomeProjection/s2plot
+DomeProjection/hardware_documentation
+DomeProjection/notes_from_xaq
 
 # Ignore directories that contain a lot of images that I don't want to track
 DomeProjection/Python/three_camera_demo
