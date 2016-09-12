@@ -21,9 +21,10 @@ B = array([[1.0, 0.0], [0.0, 1.0]])
 C0 = cholesky(array([[0.11, 0],[0, 0.11]]))
 H = array([[1.0, 0.0], [0.0, 1.0]])
 D0 = cholesky(array([[0.1, 0],[0, 0.1]]))
-Q = array([[4.0, 0.0],[0.0, 0.0]])
-R = array([[0.9, 0.0],[0.0, 0.0]])
+Q = array([[0.4, 0.0],[0.0, 0.0]])
+R = array([[9.9, 0.0],[0.0, 0.0]])
 Qf = array([[4.1, 0.0],[0.0, 0.0]])
+Qf = array([[0.4, 0.0],[0.0, 0.0]])
 
 
 # find the optimal solution for this LQG system using kalman_lqg.py

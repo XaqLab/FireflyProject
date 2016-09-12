@@ -26,7 +26,7 @@ def size(A, dimension):
 
 def unpack_Qa(Qas, k, szX, szU):
     qs = Qas[:,:,k][-1,-1]
-    q = Qas[:,:,k][0:szX,-1]
+    q = 2*Qas[:,:,k][0:szX,-1]
     Q = Qas[:,:,k][0:szX,0:szX]
     if k == Qas.shape[2] - 1:
         # last time step, no control costs
@@ -35,7 +35,7 @@ def unpack_Qa(Qas, k, szX, szU):
     else:
         # state augmentation puts the control costs in the state cost matrix
         # for THE NEXT TIME STEP
-        r = Qas[:,:,k+1][szX:szX+szU,-1]
+        r = 2*Qas[:,:,k+1][szX:szX+szU,-1]
         R = Qas[:,:,k+1][szX:szX+szU,szX:szX+szU]
     Qa = Qas[:,:,k]
     Ra = zeros([szU,szU])
@@ -88,7 +88,6 @@ def inner_loop(system, NSim=0,Init=1,Niter=0 ):
     s = qs
     # backward pass - recompute control policy
     for k in range(N-2,-1,-1):
-        #print("k =", k, end=", ")
         # adapt this loop for time-varying systems
         A = As[0:szX,0:szX,k]
         B = Bs[0:szX,0:szU,k]

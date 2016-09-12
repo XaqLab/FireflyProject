@@ -36,7 +36,7 @@ def compute_control_trajectory(f, x, nu):
     u_hat = zeros(nu)
     dt = 1.0  # until there's a reason to use something else
     dx = x[:,1] - x[:,0]
-    dfdu = Jacobian(lambda u: f(x[:,0], u_hat))
+    dfdu = Jacobian(lambda u: f(x[:,0], u))
     u_hat = pinv(dfdu(u_hat)).dot(dx/dt - f(x[:,0], u_hat))
     for k in range(N-1):
         dfdu = Jacobian(lambda u: f(x[:,k], u))
@@ -72,24 +72,6 @@ def initial_trajectories(f, x0, xf, nu, N):
     # Compute the control trajectory required for this state trajectory.
     u = compute_control_trajectory(f, x, nu)
     return x, u
-
-
-def add_row(M):
-    """ Add a row of zeros to the bottom side of a 2 dimensional array. """
-    assert len(M.shape) == 2
-    rows, cols = M.shape
-    new_M = zeros([rows+1, cols])
-    new_M[0:rows, 0:cols] = M
-    return new_M
-
-
-def add_col(M):
-    """ Add a column of zeros to the right side of a 2 dimensional array. """
-    assert len(M.shape) == 2
-    rows, cols = M.shape
-    new_M = zeros([rows, cols+1])
-    new_M[0:rows, 0:cols] = M
-    return new_M
 
 
 def linearize_and_quadratize(f, F, g, G, h, l, x, u):
@@ -135,7 +117,7 @@ def linearize_and_quadratize(f, F, g, G, h, l, x, u):
     x0a = [0.0 for i in range(nx)]
     u0a = [0.0 if i != nu else 1.0 for i in range(nu+1)]
     system['X1'] = array(x0a + u0a)
-    S1 = 1e3*identity(nxa)
+    S1 = identity(nxa)
     S1[-1,-1] = 0.0
     system['S1'] = S1
     system['A'] = zeros([nxa, nxa, N-1])
@@ -149,7 +131,7 @@ def linearize_and_quadratize(f, F, g, G, h, l, x, u):
     system['R'] = zeros([nu, nu, N-1])
     for k in range(N-1):
         dfdx = Jacobian(lambda x: f(x, u[:,k]))
-        A = dfdx(x[:,k])
+        A = dfdx(x[:,k]) + identity(nx)
         dfdu = Jacobian(lambda u: f(x[:,k], u))
         B = dfdu(u[:,k])
         C0 = sqrt(dt)*F(x[:,k], u[:,k])
@@ -168,7 +150,7 @@ def linearize_and_quadratize(f, F, g, G, h, l, x, u):
         dldx = Jacobian(lambda x: l(x, u[:,k]))
         q = dt*dldx(x[:,k])
         d2ldx2 = Hessian(lambda x: l(x, u[:,k]))
-        Q = 0.5*dt*d2ldx2(x[:,k])
+        Q = dt*d2ldx2(x[:,k])
         if k == 0:
             # Due to state augmentation, the cost for control at k=0 will be
             # paid when k=1 so r[0] and R[0] are all zeros.
@@ -178,7 +160,7 @@ def linearize_and_quadratize(f, F, g, G, h, l, x, u):
             dldu = Jacobian(lambda u: l(x[:,k-1], u))
             d2ldu2 = Hessian(lambda u: l(x[:,k-1], u))
             r = dt*dldu(u[:,k-1])
-            R = 0.5*dt*d2ldu2(u[:,k-1])
+            R = dt*d2ldu2(u[:,k-1])
         # augment matrices to accommodate linear state and control costs
         Aa = zeros([nxa, nxa])
         Aa[0:nx,0:nx] = A
@@ -191,9 +173,6 @@ def linearize_and_quadratize(f, F, g, G, h, l, x, u):
         C0a = zeros([nxa, szC0])
         C0a[0:nx,0:szC0] = C0
         system['C0'][:,:,k] = C0a
-        # meethinks no augmentation necessary for C now
-        #for j in range(C.shape[2]):
-        #    system['C'][:,:,j,k] = add_row(add_col(C[:,:,j]))
         Ha = zeros([ny, nxa])
         Ha[0:ny,0:nx] = H
         system['H'][:,:,k] = Ha
@@ -218,11 +197,11 @@ def linearize_and_quadratize(f, F, g, G, h, l, x, u):
     dhdx = Jacobian(lambda x: h(x))
     q = dhdx(x[:,N-1])
     d2hdx2 = Hessian(lambda x: h(x))
-    Q = 0.5*d2hdx2(x[:,N-1])
+    Q = d2hdx2(x[:,N-1])
     dldu = Jacobian(lambda u: l(x[:,N-2], u))
     r = dt*dldu(u[:,N-2])
     d2ldu2 = Hessian(lambda u: l(x[:,N-2], u))
-    R = 0.5*dt*d2ldu2(u[:,N-2])
+    R = dt*d2ldu2(u[:,N-2])
     Qa = zeros([nxa, nxa])
     Qa[0:nx,0:nx] = Q
     Qa[0:nx,nx+nu] = q/2
@@ -274,8 +253,7 @@ def update_trajectories(f, x_n, u_n, La):
             # is not allowed in the control law, u(k) = l(k) + L(k)x(k)
             print "Lu is not zero!"
             import ipdb; ipdb.set_trace()
-        #u = -l[:,k] - L[:,:,k].dot(x)
-        u = -1.0*l[:,k] - L[:,:,k].dot(x)
+        u = -l[:,k] - L[:,:,k].dot(x)
         u_p[:,k] = u_n[:,k] + u
         #if k == 0:
             #print l[:,k]
@@ -467,7 +445,7 @@ def optimize_nominal_trajectories(f, h, l, x0, N):
     return x, u
 
 
-def iterative_lqg(f, F, g, G, h, l, x0, N, x_lqg, u_lqg):
+def iterative_lqg(f, F, g, G, h, l, x0, N):
     """ An implementation of Todorov's 2007 iterative LQG algorithm.  The
     system is described by these equations:
         dx = f(x,u)dt + F(x,u)dw(t)
@@ -491,16 +469,6 @@ def iterative_lqg(f, F, g, G, h, l, x0, N, x_lqg, u_lqg):
     xf = zeros(nx)
     # Generate the initial state and control trajectories.
     x_n, u_n = initial_trajectories(f, x0, xf, nu, N)
-    #x_n = x_lqg
-    #u_n = u_lqg
-    #x_n = array([[  1.00000000e+02,  -4.64947858e+02,  -7.54239248e+01,
-    #              -1.75903926e+01,  -3.71092819e+00,  -3.53748983e-01],
-    #             [  1.00000000e+02,   4.03093848e+02,   6.74748337e+01,
-    #              1.56159033e+01,   3.40436355e+00,   1.22949508e+00]])
-    #u_n = array([[-513.40666381, -349.6493718,   -63.27846216,  -14.3285954,
-    #              -2.82359636],
-    #             [-503.08238791, -134.02878409,  -27.67534634,   -6.04749363,
-    #              -1.25590309]])
     # Compute the cost of the initial trajectories.
     cost = compute_cost(f, h, l, x_n, u_n)
     print "iLQG initial trajectory cost:", cost
@@ -510,9 +478,9 @@ def iterative_lqg(f, F, g, G, h, l, x0, N, x_lqg, u_lqg):
     # save the initial system for debugging
     initial_system = system
 
-    #K, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system)
-    print "Calling inner loop"
-    K, L, Cost, Xa, XSim, CostSim, iterations = inner_loop(system)
+    K, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system)
+    #print "Calling inner loop"
+    #K, L, Cost, Xa, XSim, CostSim, iterations = inner_loop(system)
     # try MATLAB code on this system to make sure it returns the same solution
     #K, L, Cost, Xa, XSim, CostSim, iterations = matlab_kalman_lqg(eng, system)
 
@@ -530,13 +498,15 @@ def iterative_lqg(f, F, g, G, h, l, x0, N, x_lqg, u_lqg):
             # plot the state and control trajectories
             ku = range(N-1)
             kx = range(N)
-            ps = figure(title="State trajectory", x_axis_label='time', y_axis_label='')
+            ps = figure(title="State trajectory", x_axis_label='time',
+                        y_axis_label='')
             #p.line(x_n[0,:], x_n[1,:], line_width=2, line_color="blue")
             ps.line(kx, x_n[0,:], line_width=2, line_color="blue")
             ps.line(kx, x_n[1,:], line_width=2, line_color="green")
             
             # plot the control trajectory
-            pc = figure(title="Control trajectory", x_axis_label='time', y_axis_label='')
+            pc = figure(title="Control trajectory", x_axis_label='time',
+                        y_axis_label='')
             #pc.line(u_n[0,:], u_n[1,:], line_width=2, line_color="blue")
             pc.line(ku, u_n[0,:], line_width=2, line_color="blue")
             pc.line(ku, u_n[1,:], line_width=2, line_color="green")
@@ -560,8 +530,8 @@ def iterative_lqg(f, F, g, G, h, l, x0, N, x_lqg, u_lqg):
             # costs along the new nominal trajectories.
             system = linearize_and_quadratize(f, F, g, G, h, l, x_n, u_n)
             # Update the feedback control law.
-            K, L, Cost, Xa, XSim, CostSim, iterations = inner_loop(system)
-            #K, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system)
+            #K, L, Cost, Xa, XSim, CostSim, iterations = inner_loop(system)
+            K, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system)
             #K, L, Cost, Xa, XSim, CostSim, iterations = \
             #        matlab_kalman_lqg(eng, system)
         iteration = iteration + 1

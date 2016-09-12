@@ -20,25 +20,9 @@ C0 = zeros([nx, nw])
 H = array([[5.0, 3.0], [2.0, 1.0]])
 D0 = cholesky(array([[0.1, 0.0],[0.0, 0.1]]))
 D0 = zeros([ny, nv])
-#Q = array([[4000.0, 1.0],[1.0, 3000.0]])
 R = array([[0.3, 0.1],[0.1, 0.4]])
-Q = array([[4.1, 1.0],[1.0, 3.2]])
-Qf = array([[4000.0, 1.0],[1.0, 3000.0]])
-
-#nx = 1
-#nu = 1
-#nw = 1
-#ny = 1
-#nv = 1
-#x0 = array([100])
-#A = array([[-2]])
-#B = array([[1.0]])
-#C0 = cholesky(array([[0.11]]))
-#H = array([[5]])
-#D0 = cholesky(array([[0.1]]))
-#Q = array([[4]])
-#R = array([[0.3]])
-#Qf = array([[4.1]])
+Q = array([[4.0, 1.0],[1.0, 3.0]])
+Qf = array([[4.1, 1.0],[1.0, 3.2]])
 
 
 def compute_LQG_trajectories(x0, L):
@@ -91,6 +75,13 @@ def f(x, u):
     I = identity(nx)
     return (A-I).dot(x) + B.dot(u) 
 
+def dfdx(x):
+    I = identity(nx)
+    return A-I
+
+def dfdu(u):
+    return B
+
 def F(x, u):
     return C0
 
@@ -105,6 +96,18 @@ def h(x):
 
 def l(x, u):
     return x.dot(Q).dot(x) + u.dot(R).dot(u)
+    
+def dldx(x):
+    return 2*Q.dot(x)
+    
+def d2ldx2(x):
+    return 2*Q
+    
+def dldu(u):
+    return 2*R.dot(u)
+    
+def d2ldu2(u):
+    return 2*R
     
 
 def compute_cost(system, x, u):
@@ -160,7 +163,7 @@ def compute_cost(system, x, u):
 
 
 # find the optimal solution for this LQG system using kalman_lqg.py
-N = 3 # number of time steps + 1
+N = 16 # number of time steps + 1
 system = {}
 system['X1'] = x0
 system['S1'] = identity(nx)
@@ -201,19 +204,7 @@ K, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system)
 x_lqg, u_lqg = compute_trajectories(f, x0, zeros([nu,N-1]), -L)
 
 # iLQG should produce the same solution
-x_ilqg, u_ilqg, Lx, lx = iterative_lqg(f, F, g, G, h, l, x0, N, x_lqg, u_lqg)
-
-# for debug
-for i in range(N-1):
-    #print L[:,:,i]
-    print u_lqg[:,i]
-
-print
-for i in range(N-1):
-    #print lx[:,i]
-    print u_ilqg[:,i]
-#for i in range(N-1):
-    #print Lx[:,:,i]
+x_ilqg, u_ilqg, Lx, lx = iterative_lqg(f, F, g, G, h, l, x0, N)
 
 # optimization strategy for finding the nominal trajectories
 #x_op, u_op = optimize_nominal_trajectories(f, h, l, x0, N)
@@ -224,32 +215,12 @@ print compute_cost(system, x_lqg, u_lqg)
 print "iLQG cost:"
 print compute_cost(system, x_ilqg, u_ilqg)
 
-#from numpy import set_printoptions
-#set_printoptions(precision=15)
-#print "iLQG state trajectory:"
-#print x_ilqg
-
-#print "iLQG control trajectory:"
-#print u_ilqg
-
-
-#print "Optimization cost:"
-#print compute_cost(system, x_op, u_op)
-
 # setup output file to plot figures
 script_name = re.split(r"/",sys.argv[0])[-1]
 output_file_name = script_name.replace(".py", ".html")
 output_file(output_file_name, title="")
 
 # plot the state trajectories
-def vector_coordinates(x):
-    return [array([0, x[0]]), array([0, x[1]])]
-
-
-from numpy.linalg import eig, norm
-from bokeh.models import Range1d
-eig_values, eig_vectors = eig(A)
-
 kx = range(N)
 p1 = figure(title="State Trajectories", x_axis_label='time', y_axis_label='')
 p1.line(kx, x_lqg[0,:], line_width=2, line_color="blue", legend="LQG x[0]")
@@ -258,45 +229,25 @@ p1.line(kx, x_ilqg[0,:], line_width=2, line_color="blue", line_dash='dashed',
         legend="iLQG x[0]")
 p1.line(kx, x_ilqg[1,:], line_width=2, line_color="green", line_dash='dashed',
         legend="iLQG x[1]")
-#p1.line(kx, x_op[0,:], line_width=2, line_color="blue", line_dash='dotted',
-#        legend="Op x[0]")
-#p1.line(kx, x_op[1,:], line_width=2, line_color="green", line_dash='dotted',
-#       legend="Op x[1]")
-p1.legend.location = "bottom_right"
+p1.legend.location = "bottom_left"
 
 # plot the control trajectories
 ku = range(N-1)
 p2 = figure(title="Control Trajectories", x_axis_label='time', y_axis_label='')
 p2.line(ku, u_lqg[0,:], line_width=2, line_color="blue", legend="LQG u[0]")
 p2.line(ku, u_lqg[1,:], line_width=2, line_color="green", legend="LQG u[1]")
-#p2.circle(ku, u_lqg[0,:], line_width=2, line_color="blue", legend="LQG u[0]")
-#p2.circle(ku, u_lqg[1,:], line_width=2, line_color="green", legend="LQG u[1]")
 p2.line(ku, u_ilqg[0,:], line_width=2, line_color="blue", line_dash='dashed',
         legend="iLQG u[0]")
 p2.line(ku, u_ilqg[1,:], line_width=2, line_color="green", line_dash='dashed',
         legend="iLQG u[1]")
-#p2.circle(ku, u_ilqg[0,:], line_width=2, line_color="blue", line_dash='dashed',
-#        legend="iLQG u[0]")
-#p2.circle(ku, u_ilqg[1,:], line_width=2, line_color="green", line_dash='dashed',
-#        legend="iLQG u[1]")
-#p2.line(ku, u_op[0,:], line_width=2, line_color="blue", line_dash='dotted',
-#        legend="Op u[0]")
-#p2.line(ku, u_op[1,:], line_width=2, line_color="green", line_dash='dotted',
-#       legend="Op u[1]")
 p2.legend.location = "bottom_right"
 
 # plot the state trajectories
 p3 = figure(title="State Trajectories", x_axis_label='state0',
             y_axis_label='state1')
-#p3.line(*vector_coordinates(100*eig_vectors[:,0]/norm(eig_vectors[:,0])),
-        #line_width=2, line_color="blue", line_dash="dashed")
-#p3.line(*vector_coordinates(100*eig_vectors[:,1]/norm(eig_vectors[:,1])),
-        #line_width=2, line_color="green", line_dash="dashed")
 p3.line(x_lqg[0,:], x_lqg[1,:], line_width=2, line_color="blue", legend="LQG")
 p3.line(x_ilqg[0,:], x_ilqg[1,:], line_width=2, line_color="blue", line_dash='dashed',
         legend="iLQG")
-p3.x_range = Range1d(-500,100)
-p3.y_range = Range1d(-100,500)
 p3.legend.location = "bottom_right"
 
 # plot the control trajectories
