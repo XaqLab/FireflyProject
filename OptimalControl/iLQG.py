@@ -1,17 +1,22 @@
 """
-Starting the implementation of the iLQG control algorithm from Todorov's 2007
-paper. The plan is to use Todorov's 2005 code (kalman_lqg) as the "inner loop."
-In general the system will have non-linear dynamics, non-quadratic costs,
-and control and state dependent noise.  At each time step, the dynamics will be
-linearized, the costs quadratized, the process noise linearized with respect to
-the control signal and the observation noise linearized with respect to the
-state so that kalman_lqg can be used to find an approximate solution.  The
-approximate solution will likely deviate from the initial state and control
-trajectories used for the linearization and quadritization process so that
-process will be repeated for the new state and control trajectories and
-repeated for each subsequent approximate solution until the solution reaches a
-steady state.
+This is an implementation of the optimal control algorithm from a 2007 paper by
+Li and Todorov titled "Iterative linearization methods for approximately
+optimal control and estimation of non-linear stochastic system." Unlike that
+paper, this implementation uses Todorov's 2005 code (kalman_lqg) as the inner
+loop in this iterative algorithm. In general the system to be controlled will
+have non-linear dynamics, non-quadratic costs, and control and state dependent
+noise. An initial state trajectory is chosen and the control trajectory
+required to produce that state trajectory is computed.  At each time step, the
+system dynamics will be linearized, the costs quadratized, the process noise
+linearized with respect to the control signal and the observation noise
+linearized with respect to the state so that kalman_lqg can be used to find an
+approximately optimal control law. This approximate control law is used to
+update the state and control trajectories used for the linearization and
+quadritization process and this two-step process is repeated until the solution
+reaches a steady state.
+
 """
+
 from numpy import array, zeros, ones, identity, stack, swapaxes, einsum, diag
 from numpy import sqrt
 from numpy.linalg import pinv
@@ -255,96 +260,8 @@ def update_trajectories(f, x_n, u_n, La):
             import ipdb; ipdb.set_trace()
         u = -l[:,k] - L[:,:,k].dot(x)
         u_p[:,k] = u_n[:,k] + u
-        #if k == 0:
-            #print l[:,k]
-            #print "x[:,0] =", x
-            #print "Lx[:,:,0] =", Lx[:,:,0]
-            #print "l[0] = lx[0] + lu[0]"
-            #print l, "=", lx[:,k], "+", lu[:,k]
-            #print "u_p[0] = u_n[0] + u[0]"
-            #print u_p[:,k], "=", u_n[:,k], "+", u
         x_p[:,k+1] = x_p[:,k] + f(x_p[:,k], u_p[:,k])*dt
     return x_p, u_p, L, l
-
-
-def update_trajectories_2(f, x_n, L):
-    """ Update the nominal state and control trajectories using the feedback
-    control law of the most recent LQG solution.  Also
-    use these new trajectories to update the iLQG feedback control law,
-    u(k) = l(k) + L(k)x(k). """
-    dt = 1  # until there's a reason to use something else
-    # Allocate memory for the control trajectory, u(k), and the open loop
-    # control, l(k).
-    T = L.shape[2]
-    nu = L.shape[0]
-    u = zeros([nu, T])
-    l = zeros([nu, T])
-    # u_hat is the estimate of the control input required to stay on the
-    # state trajectory
-    u_hat = zeros(nu)
-    dfdu = Jacobian(lambda u: f(x[:,0], u_hat))
-    dx = x[:,1] - x[:,0]
-    u_hat = pinv(dfdu(u_hat)).dot(dx/dt - f(x[:,0], u_hat))
-    for k in range(T):
-        dfdu = Jacobian(lambda u: f(x[:,k], u))
-        # find the change in u that makes f(x,u)dt close to dx
-        dx = x[:,k+1] - x[:,k]
-        du = pinv(dfdu(u_hat)).dot(dx/dt - f(x[:,k], u_hat))
-        u_hat += du
-        u[:,k] += u_hat
-        l[:,k] = u_hat - L[:,:,k].dot(x[:,k])
-        x[:,k+1] = x[:,k] + f(x[:,k], u[:,k])*dt
-    return x, u, l
-
-
-def index_system(time_varying_system, x_n, k):
-    """ Given a linear time varying system return the linear system at time
-    step k that can be passed to kalman_lqg to get a 1-step solution.  """
-    nx = x_n.shape[0]
-    system = {}
-    system['X1'] = x_n[:,k-1] - x_n[:,k] # we've linearized at x_n[:,k]
-    system['S1'] = identity(nx) # maybe there's a better way?
-    system['A'] = time_varying_system['A'][:,:,k]
-    system['B'] = time_varying_system['B'][:,:,k]
-    system['C0'] = time_varying_system['C0'][:,:,k]
-    system['C'] = time_varying_system['C'][:,:,:,k]
-    system['H'] = time_varying_system['H'][:,:,k]
-    system['D0'] = time_varying_system['D0'][:,:,k]
-    system['D'] = time_varying_system['D'][:,:,:,k]
-    #system['Q'] = stack([zeros([nx,nx]), time_varying_system['Q'][:,:,k]], -1)
-    system['Q'] = stack([time_varying_system['Q'][:,:,k-1], time_varying_system['Q'][:,:,k]], -1)
-    system['R'] = time_varying_system['R'][:,:,k-1]
-    system['E0'] = time_varying_system['E0'][:,:,k]
-    return system
-
-
-def update_trajectories_one_step(f, x_n, u_n, system):
-    """ Use a 1-step solution to the LQG approximation at each time step to
-    update the nominal state and control trajectories. """
-    dt = 1  # until there's a reason to use something else
-    # Allocate memory for the control trajectory, u(k), and the open loop
-    # control, l(k).
-    N = x_n.shape[1]
-    nx = x_n.shape[0]
-    nu = u_n.shape[0]
-    x_p = zeros([nx, N])
-    u_p = zeros([nu, N-1])
-    L_p = zeros([nu, nx, N-1])
-    for k in range(1,N):
-        # get a 1 step solution
-        #K, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system)
-        one_step_system = index_system(system, x_n, k)
-        lqg_results = kalman_lqg(one_step_system)
-        L = lqg_results[1]
-        L_p[:,:,k-1] = L[:,:,0]
-    x = system['X1'][:,0] # column vector to array slice
-    x_p[:,0] = x_n[:,0] # the initial state never changes
-    for k in range(N-1):
-        u = -L_p[:,:,k].dot(x_n[:,k] - x_n[:,k+1])
-        u_p[:,k] = u_n[:,k] + u
-        x = x + f(x, u)*dt
-        x_p[:,k+1] = x_n[:,k+1] + x
-    return x_p, u_p
 
 
 def compute_trajectories(f, x0, l, L):
