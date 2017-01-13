@@ -13,9 +13,11 @@ nu = 2
 nw = 2
 ny = 2
 nv = 2
-x0 = np.array([100.0,100.0])
-A = np.array([[1.0, 2.0], [3.0, 4.0]])
-B = 1.0/A
+x0 = np.array([2.0,2.0])
+#A = np.array([[1.0, 2.0], [3.0, 4.0]])
+A = np.array([[0.5, 0.0], [0.0, 2.0]])
+#B = 1.0/A
+B = np.array([[1.0, 0.0], [0.0, 1.0]])
 C0 = cholesky(np.array([[0.11, 0],[0, 0.11]]))
 #C0 = np.zeros([nx, nw])
 H = np.array([[5.0, 3.0], [2.0, 1.0]])
@@ -52,8 +54,8 @@ def h(x):
     """ h defines the system costs in the final state. """
     return x.dot(Qf).dot(x)
 
-N = 10 # number of time steps + 1
-M = 1 # number of trajectories
+N = 6 # number of time steps + 1
+M = 3 # number of trajectories
 
 # Find the analytic solution to this LQG system.
 system = {}
@@ -106,37 +108,6 @@ for m in range(M):
         # calculate the next state
         x_p[:,m,k+1] = (x_p[:,m,k] + f(x_p[:,m,k], u_p[:,m,k])*dt
                         + F(x_p[:,:,k], u_p[:,:,k]).dot(randn(nw)))
-
-# for debugging purposes
-#def print_array(x):
-    #print "[",
-    #for entry in x:
-        #print "%11.6f" % entry,
-    #print "]",
-#np.set_printoptions(precision=6, suppress=True)
-
-# print x_p - x_n
-#print
-#print "x_p - x_n"
-#for k in range(N-1):
-    #m = 0 # just need to look at one
-    #print "%3d" % k,
-    #print_array(x_p[:,m,k] - x_n[:,k])
-    #print
-
-# print the control inputs 
-#print
-#print "lx"
-#for k in range(N-1):
-    #m = 0 # just need to look at one
-    #print "%3d" % k,
-    #print_array(lx[:,k])
-    #print
-
-# setup output file to plot figures
-#script_name = re.split(r"/",sys.argv[0])[-1]
-#output_file_name = script_name.replace(".py", ".html")
-#output_file(output_file_name, title="")
 
 # plot the state trajectories
 kx = range(N)
