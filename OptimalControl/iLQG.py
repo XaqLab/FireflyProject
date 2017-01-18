@@ -17,7 +17,7 @@ reaches a steady state.
 
 """
 
-from numpy import array, zeros, ones, identity, stack, swapaxes, einsum, diag
+from numpy import array, zeros, ones, identity, swapaxes, einsum, diag
 from numpy import sqrt
 from numpy.linalg import pinv
 from numpy.random import randn
@@ -362,13 +362,17 @@ def optimize_nominal_trajectories(f, h, l, x0, N):
     return x, u
 
 
-def iterative_lqg(f, F, g, G, h, l, x0, N):
+def iterative_lqg(f, F, g, G, h, l, x0, N, nu, xf=None):
     """ An implementation of Todorov's 2007 iterative LQG algorithm.  The
     system is described by these equations:
         dx = f(x,u)dt + F(x,u)dw(t)
         dy = g(x,u)dt + G(x,u)dv(t)
         J(x) = E(h(x(T)) + integral over t from 0 to T of l(t,x,u))
     Where T is N-1 times dt and J(x) is the cost to go.
+    -> x0 is the initial state
+    -> N is the number of points on the state trajectory
+    -> nu is the number of elements in the control vector u
+    -> xf is the approximate final state
     This algorithm returns state and control trajectories for a single run
     along with the state estimates and the filter and feedback matrices used to
     compute the state estimates and feedback controls.
@@ -381,9 +385,9 @@ def iterative_lqg(f, F, g, G, h, l, x0, N):
     #from test_kalman_lqg import matlab_kalman_lqg
     #eng = matlab.engine.start_matlab()
 
-    nu = 2
     nx = len(x0)
-    xf = zeros(nx)
+    if xf == None:
+        xf = zeros(nx)
     # Generate the initial state and control trajectories.
     x_n, u_n = initial_trajectories(f, x0, xf, nu, N)
     # Compute the cost of the initial trajectories.
@@ -460,6 +464,6 @@ def iterative_lqg(f, F, g, G, h, l, x0, N):
 
     # exit MATLAB engine, if using matlab_kalman_lqg
     #eng.quit()
-    return x_n, u_n, L_n, l_n
+    return x_n, u_n, L_n, l_n, K[0:nx,:]
 
 

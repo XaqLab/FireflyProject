@@ -32,6 +32,7 @@
 
 from __future__ import print_function
 from numpy import array, ones, zeros, diag, trace, log10, sqrt, diff, stack
+from numpy import outer
 from scipy.linalg import pinv, svd, norm
 from numpy.matlib import repmat
 from numpy.random import randn
@@ -155,7 +156,8 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
        
         # initialize covariances
         SiE = S1
-        SiX = X1.dot(X1.T)
+        #SiX = X1.dot(X1.T)
+        SiX = outer(X1, X1)
         SiXE = zeros([szX, szX])
         
         # forward pass - recompute Kalman filter   
@@ -316,8 +318,10 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
         # initialize
         XSim = zeros([szX,NSim,N])
         Xhat = zeros([szX,NSim,N])
-        Xhat[:,:,0] = repmat(X1, 1, NSim)
-        XSim[:,:,0] = repmat(X1, 1, NSim) + sqrtS.dot(randn(szX,NSim))
+        X1_column_vector = array([X1]).T
+        Xhat[:,:,0] = repmat(X1_column_vector, 1, NSim)
+        XSim[:,:,0] = (repmat(X1_column_vector, 1, NSim)
+                       + sqrtS.dot(randn(szX,NSim)))
        
         CostSim = 0
        
@@ -373,16 +377,16 @@ def matlab_kalman_lqg(eng, system):
         eng.quit()
     """
     # convert numpy arrays to matlab arrays
-    A = matlab.double(system['A'][:,:,0].tolist())
-    B = matlab.double(system['B'][:,:,0].tolist())
-    C = matlab.double(system['C'][:,:,0].tolist())
-    C0 = matlab.double(system['C0'][:,:,0].tolist())
-    H = matlab.double(system['H'][:,:,0].tolist())
-    D = matlab.double(system['D'][:,:,0].tolist())
-    D0 = matlab.double(system['D0'][:,:,0].tolist())
-    E0 = matlab.double(system['E0'][:,:,0].tolist())
+    A = matlab.double(system['A'][:,:].tolist())
+    B = matlab.double(system['B'][:,:].tolist())
+    C = matlab.double(system['C'][:,:].tolist())
+    C0 = matlab.double(system['C0'][:,:].tolist())
+    H = matlab.double(system['H'][:,:].tolist())
+    D = matlab.double(system['D'][:,:].tolist())
+    D0 = matlab.double(system['D0'][:,:].tolist())
+    E0 = matlab.double(system['E0'][:,:].tolist())
     Q = matlab.double(system['Q'].tolist())
-    R = matlab.double(system['R'][:,:,0].tolist())
+    R = matlab.double(system['R'][:,:].tolist())
     # make sure X1 is a column vector
     if len(system['X1'].shape) == 1:
         X1 = matlab.double(array([system['X1']]).T.tolist())

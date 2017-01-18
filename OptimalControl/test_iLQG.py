@@ -204,7 +204,7 @@ K, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system)
 x_lqg, u_lqg = compute_trajectories(f, x0, zeros([nu,N-1]), -L)
 
 # iLQG should produce the same solution
-x_ilqg, u_ilqg, Lx, lx = iterative_lqg(f, F, g, G, h, l, x0, N)
+x_ilqg, u_ilqg, Lx, lx, K = iterative_lqg(f, F, g, G, h, l, x0, N)
 
 # optimization strategy for finding the nominal trajectories
 #x_op, u_op = optimize_nominal_trajectories(f, h, l, x0, N)
