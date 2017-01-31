@@ -33,7 +33,7 @@
 from __future__ import print_function
 from numpy import array, ones, zeros, diag, trace, log10, sqrt, diff, stack
 from numpy import outer
-from scipy.linalg import pinv, svd, norm
+from scipy.linalg import pinv, svd, norm, cholesky
 from numpy.matlib import repmat
 from numpy.random import randn
 import matlab
@@ -77,7 +77,7 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
     E0s = system['E0']
     Q = system['Q']
     Rs = system['R']
-    X1 = system['X1']
+    X1 = system['X1'].flatten()
     S1 = system['S1']
     assert len(Q.shape) == 3, \
             "Q must contain a state cost matrix for each time step"
@@ -156,7 +156,6 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
        
         # initialize covariances
         SiE = S1
-        #SiX = X1.dot(X1.T)
         SiX = outer(X1, X1)
         SiXE = zeros([szX, szX])
         
@@ -313,7 +312,8 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
        
         # square root of S1
         [u,s,v] = svd(S1)
-        sqrtS = u.dot(diag(sqrt(diag(s)))).dot(v.T)
+        sqrtS = u.dot(diag(sqrt(s))).dot(v.T)
+        #sqrtS = cholesky(S1)
        
         # initialize
         XSim = zeros([szX,NSim,N])
@@ -328,6 +328,7 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
         # loop over N
         for k in range(N-1):
           
+
             # update control and cost
             U = -L[:,:,k].dot(Xhat[:,:,k])
             CostSim = CostSim + sum(sum(U*(R.dot(U))))
@@ -354,6 +355,10 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
             Xhat[:,:,k+1] = (A.dot(Xhat[:,:,k]) + B.dot(U) +
                              K[:,:,k].dot(y-H.dot(Xhat[:,:,k])) +
                              E0.dot(randn(szE0,NSim)))
+            #print(k, XSim[:,:,k].T, y.T)
+        #k = N-1
+        #y = H.dot(XSim[:,:,k]) + D0.dot(randn(szD0,NSim))
+        #print(k, XSim[:,:,k].T, y.T)
        
         # final cost update
         CostSim = CostSim + sum(sum(XSim[:,:,N-1]*(Q[:,:,N-1].dot(XSim[:,:,N-1]))))
