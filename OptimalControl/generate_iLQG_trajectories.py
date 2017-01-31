@@ -1,24 +1,19 @@
 import sys, re
 import numpy as np
 from numpy.random import randn
-from numpy.linalg import cholesky, eig, pinv, norm
-#from bokeh.plotting import figure, output_file, gridplot, show
+from numpy.linalg import cholesky, eig, pinv, norm, svd
 from matplotlib import pyplot as plt
-from iLQG import iterative_lqg, linearize_and_quadratize
+from iLQG import iterative_lqg
 from kalman_lqg import kalman_lqg
 
 # define constants
 x0 = np.array([100.0,100.0])
+S0 = np.identity(2)
 A = np.array([[1.0, 2.0], [3.0, 4.0]])
-#A = np.array([[0.5, 0.0], [0.0, 2.0]])
 B = 1.0/A
-#B = np.array([[1.0, 0.0], [0.0, 1.0]])
 C0 = cholesky(np.array([[0.11, 0],[0, 0.11]]))
-#C0 = np.zeros([nx, nw])
-H = np.array([[0.0, 0.0], [0.0, 0.0]])
-#H = np.identity(2)
+H = np.array([[1.3, 2.6], [9.0, 0.3]])
 D0 = cholesky(np.array([[0.1, 0.0],[0.0, 0.1]]))
-#D0 = np.zeros([ny, nv])
 R = np.array([[0.3, 0.1],[0.1, 0.4]])
 Q = np.array([[4.0, 1.0],[1.0, 3.0]])
 Qf = np.array([[4.1, 1.0],[1.0, 3.2]])
@@ -56,7 +51,16 @@ def h(x):
     """ h defines the system costs in the final state. """
     return x.dot(Qf).dot(x)
 
-def generate_ilqg_trajectory(f, F, g, G, h, l, x0, N, nu, xf=None):
+def initial_state_trajectory(f, x0, xf, nu, N):
+    """ Compute the initial state trajectory to use for generating stochastic
+    state and control trajectories. Make the state trajectory a straight line
+    from x0 to xf."""
+    # Compute the straight line trajectory from x0 to xf.
+    dx = (xf - x0) / float(N-1)
+    x = np.array([x0 + i*dx for i in range(N)]).T
+    return x
+
+def generate_ilqg_trajectory(f, F, g, G, h, l, nu, x_n0, S0, derivatives=None):
     """ Generate an N point state trajectory and its corresponding N-1 point
     control trajectory for the opimal control system described by these
     equations:
@@ -65,70 +69,98 @@ def generate_ilqg_trajectory(f, F, g, G, h, l, x0, N, nu, xf=None):
         J(x) = E(h(x(T)) + integral over t from 0 to T of l(t,x,u))
     where x is a vector describing the state of the system, y is a vector
     containing measurable properties of the system and J is the cost to go.
+    The argument nu is the number of elements in the control input vector u.
+    The argument x_n0 is the initial nominal state trajectory.
+    The argument S0 is the initial state covariance.
+    The argument derivatives allows analytic derivatives to be passed in to
+    speed up computation.
     """
-    dt = 1 # until there's a reason to use something else
-    nx = len(x0)
+    [u,s,v] = svd(S0)
+    sqrt_S0 = u.dot(np.diag(np.sqrt(s))).dot(v.T)
+    nx = x_n0.shape[0]
+    N = x_n0.shape[1]
     u_n = np.zeros([nu,N-1])
     u_p = np.zeros([nu,N-1])
-    x_n = np.zeros([nx,N])
-    x_p = np.zeros([nx,N])
+    x = np.zeros([nx,N])
     x_hat = np.zeros([nx,N])
-    x_n[:,0] = x0
-    x_p[:,0] = x0
+    x_hat[:,0] = sqrt_S0.dot(randn(nx))
+    x_n = x_n0
+    x_p = np.zeros([nx,N])
+    x_p[:,0] = x_n[:,0] + sqrt_S0.dot(randn(nx))
+    x_p[:,0] = x_n[:,0]
     ny = len(g(x_n[:,0], u_n[:,0]))
     y_n = np.zeros([ny,N])
     y_p = np.zeros([ny,N])
     Lx = np.zeros([nu,nx,N-1])
     lx = np.zeros([nu,N-1])
     K = np.zeros([nx,ny,N-1])
-    nw = F(x_n[:,0], u_n[:,0]).shape[1]
-    nv = G(x_n[:,0], u_n[:,0]).shape[1]
     for k in range(N-1):
-        print "%3d" % k,
-        if k == 0 or norm(x_p[:,k] - x_n[:,k]) > 0.1*norm(x_n[:,k]):
-            # If k=0 then we have not yet found an approximately optimal
-            # control law. If the actual trajectory, x_p, has deviated from the
-            # nominal trajectory, x_n, by more than 10% then update the control
-            # law.
-            solution = iterative_lqg(f, F, g, G, h, l, x_p[:,k], N-k, nu, xf)
+        #print "%3d" % k,
+        #print norm(x_hat[:,k]), 0.1*norm(x_n[:,k])
+        if k == 0 or norm(x_hat[:,k]) > 0.1*norm(x_n[:,k]):
+            """
+            If k=0 then we have not yet found an approximately optimal
+            control law. If the estimated difference between the actual
+            trajectory and nominal trajectory, x_hat, has deviated from the
+            nominal trajectory, x_n, by more than 10% then update the control
+            law.  Use x_hat to to determine when to recompute the nominal
+            trajectory because using x_p - x_n is equivalent to making the
+            system fully observable.
+            """
+            # Update x_n to reflect our current belief about the state of the
+            # system before finding a new iLQG solution.
+            x_n[:,k] += x_hat[:,k]
+            solution = iterative_lqg(f, F, g, G, h, l, nu, x_n[:,k:], S0,
+                                     derivatives)
             x_n[:,k:N] = solution[0]
             u_n[:,k:N-1] = solution[1]
             Lx[:,:,k:N-1] = solution[2]
             lx[:,k:N-1] = solution[3]
             K[:,:,k:N-1] = solution[4]
-            system = linearize_and_quadratize(f, F, g, G, h, l, x_n, u_n)
+            system = solution[5]
+            k_offset = k # used to index the time-varying matrices in system
             # calculate the nominal observations
             y_n[:,k:N-1] = np.array([g(x_n[:,j], u_n[:,j])
                                      for j in range(k,N-1)]).T
+        y_n[:,N-1] = np.array(g(x_n[:,N-1], np.zeros(nu)))
         # calculate the control input
-        u_p[:,k] = (Lx[:,:,k].dot(x_hat[:,k]) + lx[:,k] + u_n[:,k])
+        u = -Lx[:,:,k].dot(x_hat[:,k]) - lx[:,k]
+        u_p[:,k] = u + u_n[:,k]
         # calculate the next state
-        x_p[:,k+1] = (x_p[:,k] + f(x_p[:,k], u_p[:,k])*dt
-                        + F(x_p[:,k], u_p[:,k]).dot(randn(nw)))
+        A = system['A'][0:nx,0:nx,k-k_offset]
+        B = system['B'][0:nx,:,k-k_offset]
+        C0 = system['C0'][0:nx,:,k-k_offset]
+        nw = C0.shape[1]
+        #C = system['C'][0:nx,:,:,k-k_offset]
+        x[:,k+1] = (A.dot(x[:,k]) + B.dot(u) + C0.dot(randn(nw)))
+        x_p[:,k+1] = x[:,k+1] + x_n[:,k+1]
         # calculate the noisy observation
-        if k == 0:
-            y_p[:,k] = y_n[:,k]
-        y_p[:,k+1] = (y_p[:,k] + g(x_p[:,k], u_p[:,k])*dt
-                      + G(x_p[:,k], u_p[:,k]).dot(randn(nv)))
+        H = system['H'][:,0:nx,k-k_offset]
+        D0 = system['D0'][0:ny,:,k-k_offset]
+        nv = D0.shape[1]
+        #D = system['D'][0:nx,:,:,k-k_offset]
+        y = H.dot(x[:,k]) + D0.dot(randn(nv))
+        y_p[:,k] = y + y_n[:,k]
         # calculate the state estimate
-        y = y_p[:,k] - y_n[:,k]
-        A = system['A'][0:nx,0:nx,k]
-        B = system['B'][0:nx,:,k]
-        H = system['H'][:,0:nx,k]
-        u = u_p[:,k] - u_n[:,k]
         x_hat[:,k+1] = (A.dot(x_hat[:,k]) + B.dot(u)
                         + K[:,:,k].dot(y - H.dot(x_hat[:,k])))
-    return x_p, u_p
+        print x[:,k], x_hat[:,k]
+        #print k, x_p[:,k], y_p[:,k]
+    k = N-1
+    print x[:,k], x_hat[:,k]
+    #y = H.dot(x[:,k]) + D0.dot(randn(nv))
+    #y_p[:,k] = y + y_n[:,k]
+    #print k, x_p[:,k], y_p[:,k]
+    return x_p, u_p, x, x_hat
 
 
-
-N = 8 # number of time steps + 1
-M = 1 # number of trajectories
+N = 3 # number of time steps + 1
+M = 9 # number of trajectories
 
 # Find the analytic solution to this LQG system.
 system = {}
 system['X1'] = x0
-system['S1'] = np.identity(nx)
+system['S1'] = S0
 system['A'] = A
 system['B'] = B
 system['C0'] = C0
@@ -140,7 +172,7 @@ system['E0'] = np.zeros([nx, 1])
 system['Q'] = np.stack([Q if k < N-1 else Qf for k in range(N)], -1)
 system['R'] = R
 
-K_lqg, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system, NSim=1)
+K_lqg, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system, NSim=M)
 #import matlab
 #import matlab.engine
 #from kalman_lqg import matlab_kalman_lqg
@@ -148,93 +180,46 @@ K_lqg, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system, NSim=1)
 #K_lqg, L, Cost, Xa, XSim, CostSim, iterations = matlab_kalman_lqg(eng, system)
 #eng.quit()
 
-u_lqg = np.zeros([nu,N-1])
-x_lqg = np.zeros([nx,N])
-y_lqg = np.zeros([ny,N])
-x_hat_lqg = np.zeros([nx,N])
-x_lqg[:,0] = x0
-y_lqg[:,0] = H.dot(x_lqg[:,0]) + D0.dot(randn(nv))
-x_hat_lqg[:,0] = x0
-for k in range(N-1):
-    u_lqg[:,k] = -L[:,:,k].dot(x_hat_lqg[:,k])
-    x_lqg[:,k+1] = A.dot(x_lqg[:,k]) + B.dot(u_lqg[:,k]) + C0.dot(randn(nw))
-    y_lqg[:,k] = H.dot(x_lqg[:,k]) + D0.dot(randn(nv))
-    x_hat_lqg[:,k+1] = (A.dot(x_hat_lqg[:,k]) + B.dot(u_lqg[:,k])
-                        + K_lqg[:,:,k].dot(y_lqg[:,k] - H.dot(x_hat_lqg[:,k])))
-
 # Generate some iLQG trajectories
+x = np.zeros([nx,M,N])
+x_hat = np.zeros([nx,M,N])
 x_p = np.zeros([nx,M,N])
 u_p = np.zeros([nu,M,N-1])
 x_n = np.zeros([nx,M,N])
 u_n = np.zeros([nu,M,N-1])
 Lx = np.zeros([nu,nx,M,N-1])
 lx = np.zeros([nu,M,N-1])
+# Generate the initial state trajectory.
+xf = np.zeros([nx])
+x_n0 = initial_state_trajectory(f, x0, xf, nu, N)
 for m in range(M):
-    x_p[:,m,:], u_p[:,m,:] = generate_ilqg_trajectory(f,F,g,G,h,l,x0,N,nu)
+    x_p[:,m,:], u_p[:,m,:], x[:,m,:], x_hat[:,m,:] = generate_ilqg_trajectory(f,F,g,G,h,l,nu,x_n0,S0)
 
-# plot the state trajectories
+# plot the LQG state trajectories
 kx = range(N)
 p1 = plt.figure()
-plt.title("State Trajectories")
+plt.title("LQG State Trajectories")
 axes = plt.gca()
 axes.set_xlabel('time')
-plt.plot(kx, x_lqg[0,:], linewidth=2, color="blue",
-        linestyle='solid', label="x_lqg[0]")
-plt.plot(kx, x_lqg[1,:], linewidth=2, color="green",
-        linestyle='solid', label="x_lqg[1]")
-plt.plot(kx, x_hat_lqg[0,:], linewidth=2, color="blue",
-        linestyle='dotted', label="x_hat[0]")
-plt.plot(kx, x_hat_lqg[1,:], linewidth=2, color="green",
-        linestyle='dotted', label="x_hat[1]")
-plt.plot(kx, XSim[0,0,:], linewidth=2, color="blue",
-        linestyle='dashed', label="XSim[0]")
-plt.plot(kx, XSim[1,0,:], linewidth=2, color="green",
-        linestyle='dashed', label="XSim[1]")
-#for m in range(M):
-#    #plt.plot(kx, x_n[0,m,:], linewidth=2, color="blue", label="x_n[0]")
-#    #plt.plot(kx, x_n[1,m,:], linewidth=2, color="green", label="x_n[1]")
-#    plt.plot(kx, x_p[0,m,:], linewidth=2, color="blue", linestyle='dashed',
-#             label="x_p[0]")
-#    plt.plot(kx, x_p[1,m,:], linewidth=2, color="green", linestyle='dashed',
-#             label="x_p[1]")
+for m in range(M):
+    plt.plot(kx, XSim[0,m,:], linewidth=2, color="blue", linestyle='dotted',
+             label="XSim[0]")
+    plt.plot(kx, XSim[1,m,:], linewidth=2, color="green", linestyle='dotted',
+             label="XSim[1]")
 #plt.legend(loc="lower right")
 
-# plot the control trajectories
-ku = range(N-1)
+# plot the iLQG state trajectories
+kx = range(N)
 p2 = plt.figure()
-plt.title("Control Trajectories")
+plt.title("iLQG State Trajectories")
 axes = plt.gca()
 axes.set_xlabel('time')
-plt.plot(ku, u_lqg[0,:], linewidth=2, color="blue", linestyle='solid',
-         label="u_lqg[0]")
-plt.plot(ku, u_lqg[1,:], linewidth=2, color="green", linestyle='solid',
-         label="u_lqg[1]")
-#for m in range(M):
-#    #plt.plot(ku, u_n[0,m,:], linewidth=2, color="blue", label="u_n[0]")
-#    #plt.plot(ku, u_n[1,m,:], linewidth=2, color="green", label="u_n[1]")
-#    plt.plot(ku, u_p[0,m,:], linewidth=2, color="blue", linestyle='dashed',
-#             label="u_p[0]")
-#    plt.plot(ku, u_p[1,m,:], linewidth=2, color="green", linestyle='dashed',
-#             label="u_p[1]")
+for m in range(M):
+    plt.plot(kx, x_p[0,m,:], linewidth=2, color="blue", linestyle='dotted',
+             label="x_p[0]")
+    plt.plot(kx, x_p[1,m,:], linewidth=2, color="green", linestyle='dotted',
+             label="x_p[1]")
 #plt.legend(loc="lower right")
+
 plt.show(block=False)
 
-## plot the state trajectories
-#p3 = figure(title="State Trajectories", x_axis_label='state0',
-#            y_axis_label='state1')
-#p3.line(x_n[0,:], x_n[1,:], line_width=2, line_color="blue", legend="x_n")
-#for m in range(M):
-#    p3.line(x_p[0,m,:], x_p[1,m,:], line_width=2, line_color="blue",
-#            line_dash='dashed', legend="x_p")
-#p3.legend.location = "bottom_right"
-#
-## plot the control trajectories
-#p4 = figure(title="Control Trajectories", x_axis_label='control0',
-#            y_axis_label='control1')
-#p4.line(u_n[0,:], u_n[1,:], line_width=2, line_color="blue", legend="u_n")
-#for m in range(M):
-#    p4.line(u_p[0,m,:], u_p[1,m,:], line_width=2, line_color="blue",
-#            line_dash='dashed', legend="u_p")
-#p4.legend.location = "bottom_right"
-#
-#p = gridplot([[p1, p2], [p3, p4]])

@@ -14,7 +14,6 @@ approximately optimal control law. This approximate control law is used to
 update the state and control trajectories used for the linearization and
 quadritization process and this two-step process is repeated until the solution
 reaches a steady state.
-
 """
 
 from numpy import array, zeros, ones, identity, swapaxes, einsum, diag
@@ -27,7 +26,6 @@ from kalman_lqg import kalman_lqg
 # debug stuff
 import sys, re
 from bokeh.plotting import figure, output_file, gridplot, show
-from iLQG_inner_loop import inner_loop
 
 
 def compute_control_trajectory(f, x, nu):
@@ -53,33 +51,7 @@ def compute_control_trajectory(f, x, nu):
     return u
 
 
-def compute_state_trajectory(f, x0, u):
-    """ Compute the state trajectory given the system dynamics, f, initial
-    state, x0, and a control trajectory, u. """
-    dt = 1.0  # until there's a reason to use something else
-    N = u.shape[1] + 1
-    nx = x0.shape[0]
-    x = zeros([nx, N])
-    x[:,0] = x0
-    for k in range(N-1):
-        x[:,k+1] = x[:,k] + f(x[:,k], u[:,k])*dt
-    return x
-
-
-def initial_trajectories(f, x0, xf, nu, N):
-    """ Compute the initial state and control trajectories to use for the first
-    linearization of the system dynamics and quadratization the costs. Try to
-    find a control trajectory that makes the state trajectory a straight line
-    from x0 to xf."""
-    # Compute the straight line trajectory from x0 to xf.
-    dx = (xf - x0) / float(N-1)
-    x = array([x0 + i*dx for i in range(N)]).T
-    # Compute the control trajectory required for this state trajectory.
-    u = compute_control_trajectory(f, x, nu)
-    return x, u
-
-
-def linearize_and_quadratize(f, F, g, G, h, l, x, u):
+def linearize_and_quadratize(f, F, g, G, h, l, x, u, S0, derivatives=None):
     """ Linearize the system dynamics and quadratize the costs around the state
     and control trajectories described by x and u for a system governed by the
     following equations.
@@ -122,9 +94,8 @@ def linearize_and_quadratize(f, F, g, G, h, l, x, u):
     x0a = [0.0 for i in range(nx)]
     u0a = [0.0 if i != nu else 1.0 for i in range(nu+1)]
     system['X1'] = array(x0a + u0a)
-    S1 = identity(nxa)
-    S1[-1,-1] = 0.0
-    system['S1'] = S1
+    system['S1'] = zeros([nxa,nxa])
+    system['S1'][0:nx,0:nx] = S0
     system['A'] = zeros([nxa, nxa, N-1])
     system['B'] = zeros([nxa, nu, N-1])
     system['C0'] = zeros([nxa, szC0, N-1])
@@ -135,26 +106,35 @@ def linearize_and_quadratize(f, F, g, G, h, l, x, u):
     system['Q'] = zeros([nxa, nxa, N])
     system['R'] = zeros([nu, nu, N-1])
     for k in range(N-1):
-        dfdx = Jacobian(lambda x: f(x, u[:,k]))
+        if derivatives == None:
+            dfdx = Jacobian(lambda x: f(x, u[:,k]))
+            dfdu = Jacobian(lambda u: f(x[:,k], u))
+            dFdu = Jacobian(lambda u: F(x[:,k], u))
+            dgdx = Jacobian(lambda x: g(x, u[:,k]))
+            dGdx = Jacobian(lambda x: G(x, u[:,k]))
+            dldx = Jacobian(lambda x: l(x, u[:,k]))
+            d2ldx2 = Hessian(lambda x: l(x, u[:,k]))
+        else:
+            dfdx = derivatives['dfdx']
+            dfdu = derivatives['dfdu']
+            dFdu = derivatives['dFdu']
+            dgdx = derivatives['dgdx']
+            dGdx = derivatives['dGdx']
+            dldx = derivatives['dldx']
+            d2ldx2 = derivatives['d2ldx2']
         A = dfdx(x[:,k]) + identity(nx)
-        dfdu = Jacobian(lambda u: f(x[:,k], u))
         B = dfdu(u[:,k])
         C0 = sqrt(dt)*F(x[:,k], u[:,k])
-        dFdu = Jacobian(lambda u: F(x[:,k], u))
         # dFdu is x by w by u, BC is x by u by w, so swap last 2 dimensions
         # and multiply by pinv(B) to get C
         C = sqrt(dt)*einsum('hi,ijk', pinv(B), swapaxes(dFdu(u[:,k]), -1, -2))
-        dgdx = Jacobian(lambda x: g(x, u[:,k]))
         H = dgdx(x[:,k])
         system['D0'][:,:,k] = G(x[:,k], u[:,k])/sqrt(dt)
-        dGdx = Jacobian(lambda x: G(x, u[:,k]))
         # dGdx is y by v by x, D is y by x by v, so swap last 2 dimensions
         D = swapaxes(dGdx(x[:,k]), -1, -2)/sqrt(dt)
         # State cost, constant, linear, quadratic terms
         qs = dt*l(x[:,k], u[:,k])
-        dldx = Jacobian(lambda x: l(x, u[:,k]))
         q = dt*dldx(x[:,k])
-        d2ldx2 = Hessian(lambda x: l(x, u[:,k]))
         Q = dt*d2ldx2(x[:,k])
         if k == 0:
             # Due to state augmentation, the cost for control at k=0 will be
@@ -264,23 +244,8 @@ def update_trajectories(f, x_n, u_n, La):
     return x_p, u_p, L, l
 
 
-def compute_trajectories(f, x0, l, L):
-    """ Compute the deterministic state and control trajectories using the
-    control law u(k) = l(k) + L(k)x(k). """
-    dt = 1.0  # until there's a reason to use something else
-    nu = L.shape[0]
-    Nu = L.shape[2]
-    u = zeros([nu, Nu])
-    nx = x0.shape[0]
-    x = zeros([nx, Nu + 1])
-    x[:,0] = x0
-    for k in range(Nu):
-        u[:,k] = l[:,k] + L[:,:,k].dot(x[:,k])
-        x[:,k+1] = x[:,k] + f(x[:,k], u[:,k])*dt
-    return x, u
-
-
 def compare_systems(system, previous_system):
+    """ Used for debugging. """
     from numpy.linalg import norm
     tolerance = 1e-6
     N = system['R'].shape[2]
@@ -318,61 +283,16 @@ def compare_systems(system, previous_system):
             print system['R'][:,:,k]
     
 
-def optimize_nominal_trajectories(f, h, l, x0, N):
-    """ I hacked together a VERY simple (aka dumb) optimization strategy to
-    find the nominal state and control trajectories that have the lowest cost.
-    There is much room for improvement: 
-    1. It does not make use of the f, l and h functions to direct the movement
-    of the state trajectory.
-    2. Currently its criteria for decreasing the size of the trajectory
-    changes and for stopping altogether are arbitrary.
-    3. This algo recomputes the entire control trajectory every time it moves a
-    single point in the state trajectory even though it is only necessary to
-    recalculate the control inputs before and after that modified point in
-    state space.
-    """
-    nx = x0.shape[0]
-    xf = zeros(nx)
-    nu = 2
-    x, u = initial_trajectories(f, x0, xf, nu, N)
-    cost = compute_cost(f, h, l, x, u)
-    print "Optimization initial cost:", cost
-    S = 50
-    costs = zeros([S,N])
-    sigma = 100
-    while sigma > 0.01:
-        for i in range(S):
-            # move each point in the state trajectory except the initial state
-            for j in range(1,N):
-                # move this point by a random amount
-                current_x = array(x[:,j])
-                x[:,j] += sigma*randn(nx)
-                current_u = u
-                u = compute_control_trajectory(f, x, nu)
-                costs[i,j] = compute_cost(f, h, l, x, u)
-                if costs[i,j] > cost:
-                    x[:,j] = current_x
-                    u = current_u
-                else:
-                    print ".",
-                    cost = costs[i,j]
-        sigma = 0.5*sigma
-        print "Sigma:", sigma
-    print "Optimization final cost:  ", cost
-    return x, u
-
-
-def iterative_lqg(f, F, g, G, h, l, x0, N, nu, xf=None):
+def iterative_lqg(f, F, g, G, h, l, nu, x_n0, S0, derivatives=None):
     """ An implementation of Todorov's 2007 iterative LQG algorithm.  The
     system is described by these equations:
         dx = f(x,u)dt + F(x,u)dw(t)
         dy = g(x,u)dt + G(x,u)dv(t)
         J(x) = E(h(x(T)) + integral over t from 0 to T of l(t,x,u))
     Where T is N-1 times dt and J(x) is the cost to go.
-    -> x0 is the initial state
-    -> N is the number of points on the state trajectory
     -> nu is the number of elements in the control vector u
-    -> xf is the approximate final state
+    -> x_n0 is the initial state trajectory
+    -> S0 is the initial state covariance matrix
     This algorithm returns state and control trajectories for a single run
     along with the state estimates and the filter and feedback matrices used to
     compute the state estimates and feedback controls.
@@ -385,23 +305,22 @@ def iterative_lqg(f, F, g, G, h, l, x0, N, nu, xf=None):
     #from test_kalman_lqg import matlab_kalman_lqg
     #eng = matlab.engine.start_matlab()
 
-    nx = len(x0)
-    if xf == None:
-        xf = zeros(nx)
-    # Generate the initial state and control trajectories.
-    x_n, u_n = initial_trajectories(f, x0, xf, nu, N)
+    N = x_n0.shape[1]   # the number of points on the state trajectory
+    nx = x_n0.shape[0]  # the number of state variables
+    x_n = x_n0
+    u_n = compute_control_trajectory(f, x_n, nu)
+
     # Compute the cost of the initial trajectories.
     cost = compute_cost(f, h, l, x_n, u_n)
     print "iLQG initial trajectory cost:", cost
     # Linearize and quadratize around (x=x_n, u=u_n).
-    system = linearize_and_quadratize(f, F, g, G, h, l, x_n, u_n)
+    system = linearize_and_quadratize(f, F, g, G, h, l, x_n, u_n, S0,
+                                      derivatives)
 
     # save the initial system for debugging
     initial_system = system
 
     K, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system)
-    #print "Calling inner loop"
-    #K, L, Cost, Xa, XSim, CostSim, iterations = inner_loop(system)
     # try MATLAB code on this system to make sure it returns the same solution
     #K, L, Cost, Xa, XSim, CostSim, iterations = matlab_kalman_lqg(eng, system)
 
@@ -449,9 +368,9 @@ def iterative_lqg(f, F, g, G, h, l, x0, N, nu, xf=None):
         else:
             # Re-linearize the system dynamics and re-quadratize the system
             # costs along the new nominal trajectories.
-            system = linearize_and_quadratize(f, F, g, G, h, l, x_n, u_n)
+            system = linearize_and_quadratize(f, F, g, G, h, l, x_n, u_n, S0,
+                                              derivatives)
             # Update the feedback control law.
-            #K, L, Cost, Xa, XSim, CostSim, iterations = inner_loop(system)
             K, L, Cost, Xa, XSim, CostSim, iterations = kalman_lqg(system)
             #K, L, Cost, Xa, XSim, CostSim, iterations = \
             #        matlab_kalman_lqg(eng, system)
@@ -464,6 +383,6 @@ def iterative_lqg(f, F, g, G, h, l, x0, N, nu, xf=None):
 
     # exit MATLAB engine, if using matlab_kalman_lqg
     #eng.quit()
-    return x_n, u_n, L_n, l_n, K[0:nx,:]
+    return x_n, u_n, L_n, l_n, K[0:nx,:], system
 
 
