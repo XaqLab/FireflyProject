@@ -1,7 +1,4 @@
-#!/usr/local/bin/python
-
 from __future__ import print_function
-import matlab.engine
 from numpy import array, zeros, ones, identity, diag, real, stack, sqrt
 from numpy import concatenate
 from statistics import mean, stdev
@@ -9,7 +6,6 @@ from numpy.linalg import inv, eig, matrix_power, matrix_rank
 from scipy.linalg import svd, norm, pinv, expm
 import scipy.stats
 from numpy.random import randn, rand, randint
-from bokeh.plotting import figure, output_file, gridplot, vplot, show
 import ipdb
 import pickle
 import time
@@ -489,10 +485,10 @@ def test_kalman_lqg():
     kalman_lqg.py to results from kalman_lqg.m.
     """
     # test paramters
-    tolerance = 1e-5  # 10 parts per million
+    tolerance = 1e-9  # 1 parts per billion
 
     # Load the saved test cases
-    with open("kalman_lqg_test_cases.pkl", 'r') as file_handle:
+    with open("LTI_regression.pkl", 'r') as file_handle:
         test_cases = pickle.load(file_handle)
     test_counter = 0
     for test_case in test_cases:
@@ -532,7 +528,7 @@ def test_time_varying_kalman_lqg():
     tolerance = 1e-9  # 1 part per billion
 
     # Load the saved test cases
-    with open("time_varying_test_cases.pkl", 'r') as file_handle:
+    with open("LTV_regression.pkl", 'r') as file_handle:
         test_cases = pickle.load(file_handle)
     test_counter = 0
     for test_case in test_cases:
