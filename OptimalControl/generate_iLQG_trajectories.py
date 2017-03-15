@@ -5,6 +5,7 @@ from numpy.linalg import cholesky, eig, pinv, norm, svd
 from matplotlib import pyplot as plt
 from iLQG import iterative_lqg
 from kalman_lqg import kalman_lqg
+from optimal_control import initial_state_trajectory
 
 # define constants
 x0 = np.array([100.0,100.0])
@@ -50,15 +51,6 @@ def l(x, u):
 def h(x):
     """ h defines the system costs in the final state. """
     return x.dot(Qf).dot(x)
-
-def initial_state_trajectory(f, x0, xf, nu, N):
-    """ Compute the initial state trajectory to use for generating stochastic
-    state and control trajectories. Make the state trajectory a straight line
-    from x0 to xf."""
-    # Compute the straight line trajectory from x0 to xf.
-    dx = (xf - x0) / float(N-1)
-    x = np.array([x0 + i*dx for i in range(N)]).T
-    return x
 
 def generate_ilqg_trajectory(f, F, g, G, h, l, nu, x_n0, S0, derivatives=None):
     """ Generate an N point state trajectory and its corresponding N-1 point

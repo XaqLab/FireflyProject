@@ -37,28 +37,7 @@ from scipy.linalg import pinv, svd, norm, cholesky
 from numpy.matlib import repmat
 from numpy.random import randn
 import matlab
-
-
-def is_scalar(variable):
-    """ Treat variable as a scalar if it is a float or an int. """
-    return isinstance(variable, float) or isinstance(variable, int)
-
-
-def dist(positions):
-    """ Emulate the single argument version of MATLAB's dist function which
-    returns a matrix of the distances between a set of locations. """
-    return array([abs(array(positions) - i) for i in positions])
-
-
-def size(A, dimension):
-    """ Emulate MATLAB's size function. """
-    if is_scalar(A):
-        size = 1
-    elif len(A.shape) < dimension:
-        size = 1
-    else:
-        size = A.shape[dimension - 1]
-    return size
+from optimal_control import *
 
 
 def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
@@ -80,7 +59,7 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
     X1 = system['X1'].flatten()
     S1 = system['S1']
     assert len(Q.shape) == 3, \
-            "Q must contain a state cost matrix for each time step"
+            "Q must contain a state cost matrix for each time"
 
     # determine sizes
     szX = size(As, 1)
@@ -112,33 +91,16 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
         E0s = zeros([szX, 1])
     
     
-    if len(As.shape) == 2: 
-        # if A is time invariant make copies for each time step but the last
-        As = stack([As for k in range(N-1)], -1)
-    if len(Bs.shape) == 2: 
-        # if B is time invariant make copies for each time step but the last
-        Bs = stack([Bs for k in range(N-1)], -1)
-    if len(Rs.shape) == 2: 
-        # if R is time invariant make copies for each time step but the last
-        Rs = stack([Rs for k in range(N-1)], -1)
-    if len(C0s.shape) == 2: 
-        # if C0 is time invariant make copies for each time step but the last
-        C0s = stack([C0s for k in range(N-1)], -1)
-    if len(Cs.shape) == 3: 
-        # if C is time invariant make copies for each time step but the last
-        Cs = stack([Cs for k in range(N-1)], -1)
-    if len(E0s.shape) == 2: 
-        # if E0 is time invariant make copies for each time step but the last
-        E0s = stack([E0s for k in range(N-1)], -1)
-    if len(Hs.shape) == 2: 
-        # if H is time invariant make copies for each time step
-        Hs = stack([Hs for k in range(N)], -1)
-    if len(D0s.shape) == 2: 
-        # if D0 is time invariant make copies for each time step
-        D0s = stack([D0s for k in range(N)], -1)
-    if len(Ds.shape) == 3: 
-        # if D is time invariant make copies for each time step
-        Ds = stack([Ds for k in range(N)], -1)
+    # For time invariant matrices make copies for the applicable time points
+    As = stack_matrix(As, N-1)
+    Bs = stack_matrix(Bs, N-1)
+    C0s = stack_matrix(C0s, N-1)
+    Cs = stack_tensor(Cs, N-1)
+    Hs = stack_matrix(Hs, N)
+    D0s = stack_matrix(D0s, N)
+    Ds = stack_tensor(Ds, N)
+    Rs = stack_matrix(Rs, N-1)
+    E0s = stack_matrix(E0s, N-1)
     
     # numerical parameters
     MaxIter = 500
@@ -237,7 +199,6 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
                    (Cost[iteration] + trace(Sx.dot(C0).dot(C0.T)) +
                     trace(Se.dot(K[:,:,k].dot(D0).dot(D0.T).dot(K[:,:,k].T)
                                  + E0.dot(E0.T) + C0.dot(C0.T))))
-
            
             # Controller
             temp = R + B.T.dot(Sx).dot(B)
@@ -368,7 +329,8 @@ def kalman_lqg(system, NSim=0,Init=1,Niter=0 ):
         XSim = []
         CostSim = []
     
-    return [K, L, Cost, Xa, XSim, CostSim, iteration]
+    return {'K':K, 'L':L, 'Cost':Cost, 'Xa':Xa, 'XSim':XSim, 'CostSim':CostSim,
+            'iteration':iteration}
 
 
 def matlab_kalman_lqg(eng, system):
