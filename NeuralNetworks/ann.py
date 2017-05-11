@@ -4,43 +4,64 @@
 import numpy as np
 from numpy.random import rand, randn
 import tensorflow as tf
+import pickle
+
+DEBUG = True
 
 
 class Network(object):
     """ A simple artificial neural network class. """
-    def __init__(self, dimensions, activation_functions, uniform=True):
+    def __init__(self, dimensions, activation_functions,
+                 initial_weight_file=None, uniform=True):
         """ The dimensions argument is a list that specifies the number of
         inputs to the network and the number of units in each layer.  The
         number of inputs to the network is dimensions[0] and the number of
         units in the nth layer is dimensions[n].  The activation_functions
         argument is a list of functions to be used as the activation fuction
         for each layer of the network. """
+        self.dimensions = dimensions
         self.inputs = tf.placeholder(tf.float32,
                                      shape=[None, dimensions[0]])
         self.weights = []
         self.z = []
         self.activations = [self.inputs]
+
+        if initial_weight_file:
+            # load initial weights from a file
+            with open(initial_weight_file, 'r') as file_handle:
+                initial_weights = pickle.load(file_handle)
+        else:
+            # generate new initial weights
+            initial_weights = []
+            for i in range(len(dimensions) - 1):
+                fan_in = dimensions[i]
+                fan_out = dimensions[i+1]
+                if uniform:
+                    # Xavier initialization, uniform distribution
+                    x = np.sqrt(6.0 / (fan_in + fan_out))
+                    iw = 2*x*rand(dimensions[i], dimensions[i+1]) - x
+                else:
+                    # Xavier initialization, normal distribution
+                    sigma = np.sqrt(3.0 / (fan_in + fan_out))
+                    iw = sigma*randn(dimensions[i], dimensions[i+1])
+                iw = np.array(iw, dtype=np.float32)
+                initial_weights.append(iw)
+        #print "Initial Network Weights:\n", initial_weights
         for i in range(len(dimensions) - 1):
-            fan_in = dimensions[i]
-            fan_out = dimensions[i+1]
-            if uniform:
-                # Xavier initialization, uniform distribution
-                x = np.sqrt(6.0 / (fan_in + fan_out))
-                W = tf.Variable(2*x*rand(dimensions[i], dimensions[i+1]) - x,
-                                dtype=tf.float32)
-            else:
-                sigma = np.sqrt(3.0 / (fan_in + fan_out))
-                W = tf.Variable(sigma*randn(dimensions[i], dimensions[i+1]),
-                                dtype=tf.float32)
+            W = tf.Variable(initial_weights[i])
             self.weights.append(W)
             self.z.append(tf.matmul(self.activations[-1], W))
             f = activation_functions[i]
+            # Use different activation functions within a layer
             #alist = [f[j](z[:,j]) for j in range(dimensions[i+1])]
             #activations = tf.concat(alist, 1)
             #activations = tf.pack(alist, 0)
             activations = f(self.z[-1])
             self.activations.append(activations)
 	self.outputs = self.activations[-1]
+        if DEBUG and initial_weight_file == None:
+            with open('initial_weights.pkl', 'w') as file_handle:
+                pickle.dump(initial_weights, file_handle)
 
 
     def infer(self, inputs):
