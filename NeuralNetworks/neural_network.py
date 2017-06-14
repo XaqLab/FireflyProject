@@ -5,48 +5,43 @@ import numpy as np
 from numpy.random import rand, randn
 import tensorflow as tf
 import pickle
+import os
 
 DEBUG = True
 
 
-class Network(object):
+class NeuralNetwork(object):
     """ A simple artificial neural network class. """
-    def __init__(self, dimensions, activation_functions,
-                 initial_weight_file=None, uniform=True):
+    def __init__(self, tf_session, dimensions, activation_functions,
+                 uniform=True):
         """ The dimensions argument is a list that specifies the number of
         inputs to the network and the number of units in each layer.  The
         number of inputs to the network is dimensions[0] and the number of
         units in the nth layer is dimensions[n].  The activation_functions
         argument is a list of functions to be used as the activation fuction
         for each layer of the network. """
+        self.tf_session = tf_session
         self.dimensions = dimensions
         self.inputs = tf.placeholder(tf.float32,
                                      shape=[None, dimensions[0]])
         self.weights = []
         self.z = []
         self.activations = [self.inputs]
-
-        if initial_weight_file:
-            # load initial weights from a file
-            with open(initial_weight_file, 'r') as file_handle:
-                initial_weights = pickle.load(file_handle)
-        else:
-            # generate new initial weights
-            initial_weights = []
-            for i in range(len(dimensions) - 1):
-                fan_in = dimensions[i]
-                fan_out = dimensions[i+1]
-                if uniform:
-                    # Xavier initialization, uniform distribution
-                    x = np.sqrt(6.0 / (fan_in + fan_out))
-                    iw = 2*x*rand(dimensions[i], dimensions[i+1]) - x
-                else:
-                    # Xavier initialization, normal distribution
-                    sigma = np.sqrt(3.0 / (fan_in + fan_out))
-                    iw = sigma*randn(dimensions[i], dimensions[i+1])
-                iw = np.array(iw, dtype=np.float32)
-                initial_weights.append(iw)
-        #print "Initial Network Weights:\n", initial_weights
+        # generate new initial weights
+        initial_weights = []
+        for i in range(len(dimensions) - 1):
+            fan_in = dimensions[i]
+            fan_out = dimensions[i+1]
+            if uniform:
+                # Xavier initialization, uniform distribution
+                x = np.sqrt(6.0 / (fan_in + fan_out))
+                iw = 2*x*rand(dimensions[i], dimensions[i+1]) - x
+            else:
+                # Xavier initialization, normal distribution
+                sigma = np.sqrt(3.0 / (fan_in + fan_out))
+                iw = sigma*randn(dimensions[i], dimensions[i+1])
+            iw = np.array(iw, dtype=np.float32)
+            initial_weights.append(iw)
         for i in range(len(dimensions) - 1):
             W = tf.Variable(initial_weights[i])
             self.weights.append(W)
@@ -59,9 +54,46 @@ class Network(object):
             activations = f(self.z[-1])
             self.activations.append(activations)
 	self.outputs = self.activations[-1]
-        if DEBUG and initial_weight_file == None:
-            with open('initial_weights.pkl', 'w') as file_handle:
-                pickle.dump(initial_weights, file_handle)
+
+
+    def set_weights(self, weights):
+        """ If the argument is a list then set the network weights using the
+        weights in the list. If the argument is a filename then read the
+        weights from the file. """
+        if isinstance(weights, str):
+            weight_file = weights
+            with open(weight_file, 'r') as file_handle:
+                weight_list = pickle.load(file_handle)
+        if isinstance(weights, list):
+                weight_list = weights
+        for i in range(len(weight_list)):
+            self.tf_session.run(self.weights[i].assign(weight_list[i]))
+
+
+    def save_weights(self, filename):
+        """ Save the network's weights. """
+        if not os.path.isfile(filename):
+            # Don't overwrite existing files.
+            weights = self.tf_session.run(self.weights)
+            with open(filename, 'w') as file_handle:
+                pickle.dump(self.tf_session.run(self.weights), file_handle)
+        else:
+            # Let the user know the weights were not saved.
+            raise IOError, "Network weights not saved, file exists."
+
+
+    def print_weights(self):
+        """ Print the network weights. """
+        print "Network weights:"
+        for w in self.weights:
+            print self.tf_session.run(w)
+
+
+    def print_activations(self, inputs):
+        """ Print the network activations. """
+        print "Activations:"
+        for a in self.network.activations:
+            print self.tf_session.run(w, feed_dict={self.inputs: inputs})
 
 
     def infer(self, inputs):
