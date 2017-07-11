@@ -167,12 +167,12 @@ def plot_distance_histogram(final_distances):
     """ Plot a histogram of the final distances to the fireflies. """
     fig1 = plt.figure()
     axes = plt.subplot(111)
-    dx = 1.0
     dmin = min(final_distances)
     dmax = max(final_distances)
-    bins = np.arange(0, dmax + 2*dx, dx)
-    axes.hist(final_distances, bins=bins)
-    axes.set_xlabel("Distance")
+    dx = (dmax - dmin)/100.0
+    bins = np.arange(dmin - dx, dmax + 2*dx, dx)
+    axes.hist(np.log10(final_distances), bins=np.log10(bins))
+    axes.set_xlabel("log_10 Distance")
     axes.set_ylabel("Fireflies")
     #axes.plot(x, counts, label="%d, %d" % (i,j))
     #handles, labels = axes.get_legend_handles_labels()

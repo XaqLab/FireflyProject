@@ -6,8 +6,8 @@ import tensorflow as tf
 import pickle
 import signal
 import datetime as dt
-#from firefly_task import FireflyTask
-from firefly_task_rect import FireflyTask
+from firefly_task import FireflyTask
+#from firefly_task_rect import FireflyTask
 from visualization import load
 
 
@@ -66,9 +66,25 @@ def generate_trajectories(networks, num_trajectories, distance):
 if __name__ == "__main__":
     print "Let's eat some fireflies, yeah!"
     session = tf.Session()
-    game = FireflyTask(session)
-    game.practice(batch_size=1, max_trials=2000, distance=1,
-                  firefly_file=None, plot_progress=plot_progress)
+    network = {}
+    network['dimensions'] = [3, 10, 2]
+    #network['dimensions'] = [3, 2]
+    #network['activation functions'] = [tf.identity]
+    #network['activation functions'] = [tf.tanh]*2
+    scaled_tanh = lambda x: 1.7159*tf.tanh(2.0*x/3.0)
+    network['activation functions'] = [scaled_tanh]*2
+    #network['optimizer'] = tf.train.AdadeltaOptimizer(learning_rate=1.0)
+    #network['optimizer'] = tf.train.AdagradOptimizer(learning_rate=0.001)
+    network['optimizer'] = tf.train.AdamOptimizer(learning_rate=0.001)
+    #network['lr'] = tf.placeholder(tf.float32, shape=[])
+    #optimizer = tf.train.GradientDescentOptimizer
+    #network['optimizer'] = optimizer(learning_rate=network['lr'])
+    #self.activation_functions = [tf.nn.softsign]
+    #self.activation_functions = [tf.nn.relu, tf.tanh]
+    #self.activation_functions = [tf.nn.softsign, tf.nn.softsign]
+    game = FireflyTask(session, network)
+    #initial_weights = session.run(game.network.weights)
+    #save([initial_weights], "initial_weights", append_datetime=True)
     #hand_picked = [np.array([[ 0.63661977, -0.00000000],
                              #[-0.00000000, -1.00000000],
                              #[-2.20000000, -0.50000000]], dtype=np.float32)]
@@ -77,8 +93,11 @@ if __name__ == "__main__":
                              #[-1.98275447, -0.50836277]], dtype=np.float32)]
     #hand_picked = [np.array([[ 1.0, 0.0],
                              #[ 0.0, 1.0],
-                             #[ 0.0, 0.0]], dtype=np.float32)]
+                             #[ 0.0, 0.5]], dtype=np.float32)]
     #game.network.set_weights(hand_picked)
+    fireflies = game.practice(batch_size=1, max_trials=20000, distance=1,
+                              fireflies=None, plot_progress=plot_progress)
+    #save([fireflies], "training_set", append_datetime=True)
     #trajectories, fireflies = game.generate_trajectories(100, distance=10)
     plot_trajectories(game, *game.generate_trajectories(10, distance=10)[:2])
     #game.network.print_weights()

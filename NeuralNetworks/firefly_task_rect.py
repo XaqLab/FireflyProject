@@ -6,6 +6,7 @@ import tensorflow as tf
 import pickle
 import signal
 from neural_network import NeuralNetwork
+from math import isnan
 
 
 class GracefulInterruptHandler(object):
@@ -134,16 +135,26 @@ class FireflyTask(object):
     correspond to a discrete rotation and movement forward or backward of the
     agent. Soft sign activation functions are used to limit how far the agent
     can rotate or move in a single time step. """
-    def __init__(self, tf_session, initial_weight_file=None):
+    def __init__(self, tf_session, network):
         """ The tf_session argument is a tensorflow session. """
         self.tf_session = tf_session
+        if network:
+            self.network_dimensions = network['dimensions']
+            self.activation_functions = network['activation functions']
+            self.optimizer = network['optimizer']
+        else:
+            self.network_dimensions = [3, 100, 10, 2]
+            scaled_tanh = lambda x: 1.7159*tf.tanh(2.0*x/3.0)
+            self.activation_functions = [scaled_tanh]*3
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
+            #self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.0005)
+            #self.optimizer = tf.train.AdadeltaOptimizer(learning_rate=10.0)
+            #self.optimizer = tf.train.AdagradOptimizer(learning_rate=0.01)
         #self.network_dimensions = [3,  2]
-        self.network_dimensions = [3, 100, 10, 2]
         #self.activation_functions = [tf.identity]*2
-        #self.activation_functions = [lambda x: 1.7159*tf.tanh(2.0*x/3.0)]
         #self.activation_functions = [tf.tanh]*3
         #self.activation_functions = [tf.nn.softsign]
-        self.activation_functions = [tf.nn.relu, tf.nn.relu, tf.tanh]
+        #self.activation_functions = [tf.nn.relu, tf.nn.relu, tf.tanh]
         #self.activation_functions = [tf.nn.softsign, tf.nn.softsign]
         self.afun_names = [f.__name__ for f in self.activation_functions]
         self.network = NeuralNetwork(self.tf_session, self.network_dimensions,
@@ -170,13 +181,9 @@ class FireflyTask(object):
         self.new_distance2 = tf.square(self.new_x) + tf.square(self.new_y)
         self.new_distance = tf.sqrt(self.new_distance2)
         #self.objective = (self.new_distance2 +
-                          #0.0*frobenius_norm(self.network.weights[0]))
-        self.objective = tf.nn.softsign(self.new_distance/self.distance - 1)
-        #self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.05)
-        self.optimizer = tf.train.AdadeltaOptimizer(learning_rate=10.0)
-        #self.optimizer = tf.train.AdagradOptimizer(learning_rate=1.0)
-        #self.optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
-                                    #feed_dict=self.feed_dict(2.0/(trial + 1)))
+        #                  0.0*frobenius_norm(self.network.weights[0]))
+        self.objective = tf.nn.softsign(self.new_distance - self.distance)
+        #self.objective = tf.nn.softsign(self.new_distance/self.distance - 1)
         self.minimize = self.optimizer.minimize(self.objective)
         self.tf_session.run(tf.global_variables_initializer())
         self.training_figure = None
@@ -277,8 +284,13 @@ class FireflyTask(object):
                 step = 0
                 while step < 3*distance and not self.caught(batch):
                     step = step + 1
+                    W0 = self.eval(self.network.weights, batch)
                     self.tf_session.run(self.minimize,
                                         feed_dict=self.feed_dict(batch))
+                    W = self.eval(self.network.weights, batch)
+                    if any([isnan(a) for c in W for b in c for a in b]):
+                        print "Yo, your weights are NaN bro."
+                        import ipdb;ipdb.set_trace()
                     self.move(batch)
                 # count number of fireflies caught in a row
                 if self.caught(batch):
@@ -298,10 +310,10 @@ class FireflyTask(object):
                     weights = [w for w in self.eval(self.network.weights, batch)]
                 if (trial + 1) % 100 == 0:
                     print "Practice trial:", trial + 1, \
-                            "mean distance:", distances.mean()
+                            "mean distance:", distances[:trial].mean()
                     if plot_progress:
                         plot_progress(self, trial, dw_means, dw_stds,
-                                      distances, batch_size)
+                                      distances[:trial], batch_size)
                     # stop when the performance is good enough
                     if fireflies_caught >= 100:
                         full = True

@@ -6,6 +6,7 @@ import tensorflow as tf
 import pickle
 import signal
 from neural_network import NeuralNetwork
+from keypress import Keypress
 
 
 class GracefulInterruptHandler(object):
@@ -80,6 +81,12 @@ def frobenius_norm(tensor):
     return frobenius_norm
 
 
+def L1_norm(tensor):
+    """ I'm a gonna use this for regularization. """
+    L1_norm = tf.norm(tensor, ord=1)
+    return L1_norm
+
+
 def tfsub(a, b):
     ax = a[:,0]
     ay = a[:,1]
@@ -134,16 +141,26 @@ class FireflyTask(object):
     correspond to a discrete rotation and movement forward or backward of the
     agent. Soft sign activation functions are used to limit how far the agent
     can rotate or move in a single time step. """
-    def __init__(self, tf_session, initial_weight_file=None):
-        """ The tf_session argument is a tensorflow session. """
+    def __init__(self, tf_session, network=None):
+        """ The tf_session argument is a tensorflow session. The network
+        argument is a dictionary specifying the network dimensions and
+        activation functions. """
         self.tf_session = tf_session
-        self.network_dimensions = [3,  2]
-        #self.network_dimensions = [3, 100, 2]
-        self.activation_functions = [tf.identity]*2
-        #self.activation_functions = [tf.tanh]
-        #self.activation_functions = [tf.nn.softsign]
-        #self.activation_functions = [tf.nn.relu, tf.tanh]
-        #self.activation_functions = [tf.nn.softsign, tf.nn.softsign]
+        if network:
+            if 'dimensions' in network.keys():
+                self.network_dimensions = network['dimensions']
+            if 'activation functions' in network.keys():
+                self.activation_functions = network['activation functions']
+            if 'optimizer' in network.keys():
+                self.optimizer = network['optimizer']
+            if 'lr' in network.keys():
+                self.lr = network['lr']
+        else:
+            self.network_dimensions = [3,  2]
+            self.activation_functions = [tf.identity]
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
+        #rotation_mask = tf.placeholder(tf.float32,
+                                         #shape=network_outputs.get_shape())
         self.afun_names = [f.__name__ for f in self.activation_functions]
         self.network = NeuralNetwork(self.tf_session, self.network_dimensions,
                                      self.activation_functions, uniform=False)
@@ -156,8 +173,11 @@ class FireflyTask(object):
         # The network outputs are the rotation and forward movement of the
         # agent.
         self.rotation = 1.0*pi/2*self.network.outputs[:,0]
-        #self.step_size = 1.0*self.network.outputs[:,1] + 0.5
         self.step_size = 1.0*self.network.outputs[:,1]
+        #self.rotation = \
+                #pi/2*tf.reduce_sum(self.rotation_mask*self.network.outputs)
+        #self.step_size = \
+                #tf.reduce_sum(self.step_size_mask*self.network.outputs)
         # Using network outputs to update direction and distance.
         self.theta = self.direction - self.rotation
         self.x = self.distance*tf.cos(self.theta)
@@ -167,14 +187,12 @@ class FireflyTask(object):
                                    self.direction)
         self.new_distance2 = (tf.square(self.y)
                               + tf.square(self.x - self.step_size))
-        self.objective = (self.new_distance2 +
-                          0.0*frobenius_norm(self.network.weights[0]))
         self.new_distance = tf.sqrt(self.new_distance2)
-        #self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.05)
-        #self.optimizer = tf.train.AdadeltaOptimizer(learning_rate=10.0)
-        #self.optimizer = tf.train.AdagradOptimizer(learning_rate=1.0)
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
-                                    #feed_dict=self.feed_dict(2.0/(trial + 1)))
+        #self.objective = (self.new_distance2 +
+                          #1.0*L1_norm(self.network.weights[0]))
+        self.objective = tf.nn.softsign(self.new_distance - self.distance) + \
+                #-tf.log(0.05 + tf.exp(-tf.square(self.network.weights[0]/1e-4)))
+                          #1.0*L1_norm(self.network.weights[0]))
         self.minimize = self.optimizer.minimize(self.objective)
         self.tf_session.run(tf.global_variables_initializer())
         self.training_figure = None
@@ -199,7 +217,7 @@ class FireflyTask(object):
         return self.calc_distance(fireflies) <= self.tolerance
 
 
-    def feed_dict(self, fireflies):
+    def feed_dict(self, fireflies, learning_rate=None):
         """ Generate the feed dictionary from dictionaries that describe the
         location of the agent and the firefly. """
         rows, cols = fireflies.shape
@@ -212,7 +230,13 @@ class FireflyTask(object):
         # calculation of the new direction and distance.
         network_inputs[:,1] -= 0.5 
         network_inputs[:,-1] = 1 # constant input
-        return {self.network.inputs:network_inputs}
+        if hasattr(self, 'lr') and learning_rate != None:
+            # For manual adjustment of learning rate, GradientDescentOptimizer
+            # only.
+            feed = {self.network.inputs:network_inputs, self.lr:learning_rate}
+        else:
+            feed = {self.network.inputs:network_inputs}
+        return feed
 
 
     def eval(self, x, fireflies):
@@ -241,15 +265,11 @@ class FireflyTask(object):
         
 
     def practice(self, batch_size=1, max_trials=1000, distance=1,
-                 firefly_file=None, plot_progress=False):
+                 fireflies=None, plot_progress=False):
         """ Adjust the network weights to minimize the distance to the firefly
         after taking a step where the size and direction of the step are
         determined by the network outputs. """
-        if firefly_file:
-            # load fireflies from previous training
-            with open(firefly_file, 'r') as file_handle:
-                fireflies = pickle.load(file_handle)
-        else:
+        if fireflies == None:
             # generate new fireflies for training
             fireflies = []
             for trial in range(batch_size*max_trials):
@@ -264,16 +284,26 @@ class FireflyTask(object):
         fireflies_caught = 0
         trial = 0
         full = False
+        learning_rate = 0.1
+        lr_delta = 10**round(np.log10(learning_rate))
+        keypress = Keypress()
         with GracefulInterruptHandler() as h:
             while trial < max_trials and not full:
                 batch = np.stack(fireflies[trial*batch_size:(trial+1)*batch_size])
                 # train the network
                 step = 0
-                while step < distance and not self.caught(batch):
+                old_distance = self.calc_distance(batch)
+                #while step < distance and not self.caught(batch):
+                while (not self.caught(batch)
+                       and (step == 0 or distance_change < 0)):
                     step = step + 1
                     self.tf_session.run(self.minimize,
-                                        feed_dict=self.feed_dict(batch))
+                                        feed_dict=self.feed_dict(batch,
+                                                                 learning_rate))
                     self.move(batch)
+                    new_distance = self.calc_distance(batch)
+                    distance_change = new_distance - old_distance
+                    old_distance = new_distance
                 # count number of fireflies caught in a row
                 if self.caught(batch):
                     fireflies_caught += batch_size
@@ -292,18 +322,32 @@ class FireflyTask(object):
                     weights = [w for w in self.eval(self.network.weights, batch)]
                 if (trial + 1) % 100 == 0:
                     print "Practice trial:", trial + 1, \
-                            "mean distance:", distances.mean()
+                            "mean distance:", distances[trial - 99:trial + 1].mean()
                     if plot_progress:
                         plot_progress(self, trial, dw_means, dw_stds,
-                                      distances, batch_size)
-                    # stop when the performance is good enough
+                                      distances[:trial], batch_size)
+                    # Stop when the performance is good enough.
                     if fireflies_caught >= 100:
                         full = True
-                # increment trial number
+                # Increment the trial number.
                 trial = trial + 1
                 if h.interrupted:
-                    # allow the user to stop training using Control-C
+                    # Allow user to stop training using Control-C.
                     break
+                if self.optimizer.__dict__['_name'] == 'GradientDescent':
+                    # For gradient descent allow user to change learning rate
+                    # interactively.
+                    key = keypress()
+                    if key == 'up':
+                        learning_rate += lr_delta
+                        print "LR =", learning_rate
+                    if key == 'down':
+                        learning_rate -= lr_delta
+                        print "LR =", learning_rate
+                    if key == 'left':
+                        lr_delta *= 10
+                    if key == 'right':
+                        lr_delta *= 0.1
         return fireflies
 
 
@@ -327,9 +371,15 @@ class FireflyTask(object):
             trajectory = [origin]
             agent_direction = pi/2
             steps = 0
-            while steps < 3*distance and not self.caught(firefly):
+            old_distance = self.calc_distance(firefly)
+            #while (not self.caught(firefly)
+                   #and (steps == 0 or distance_change < 0)):
+            while steps < 30*distance:
                 steps = steps + 1
                 rotation, step_size = self.move(firefly)
+                new_distance = self.calc_distance(firefly)
+                distance_change = new_distance - old_distance
+                old_distance = new_distance
                 agent_direction += rotation
                 step = np.array([step_size*np.cos(agent_direction),
                                  step_size*np.sin(agent_direction)])
