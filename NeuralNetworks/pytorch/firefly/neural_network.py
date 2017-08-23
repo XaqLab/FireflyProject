@@ -4,6 +4,7 @@ import torch
 from torch.autograd import Variable
 import pickle
 import os
+import signal
 
 
 class GracefulInterruptHandler(object):
@@ -130,9 +131,8 @@ def save_parameters(network, filename):
 def print_parameters(network):
     """ Print the network weights and biases. """
     print("Network weights, bias:")
-    for child in network.children():
-        if isinstance(child, torch.nn.Linear):
-            print(child.weight, child.bias)
+    for p in network.parameters():
+        print(p)
 
 
 def print_activations(network):

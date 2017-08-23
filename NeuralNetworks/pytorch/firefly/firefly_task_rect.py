@@ -15,6 +15,13 @@ softsign = torch.nn.Softsign()
 pi = np.pi
 
 
+def closure(function, data, *args, **kwargs):
+    """ Enclose the function and data so the data is remembered between calls
+    to function. """
+    enclosed_data = data
+    return lambda *args, **kwargs: function(enclosed_data, *args, **kwargs)
+
+
 def rect(z):
     """ Convert polar coordinates to rectangular coordinates. """
     if isinstance(z, np.ndarray):
@@ -52,10 +59,20 @@ def new_trial(max_distance=1.0, verbose=False):
     return firefly
 
 
-def move(agent, network_output):
+def encode(network_input):
+    """ Shift and scale the network input to get a mean of zero and a variance
+    of one.  """
+    #offset = Variable(torch.Tensor([[0.0,-0.5]]))
+    offset = Variable(torch.Tensor([[0.0, 0.0]]))
+    return network_input + offset
+
+
+def move(agent, firefly, network, hx):
     """ Use the network outputs to move the agent in absolute coordinates.
     reference frame where the firefly is stationary. Return the updated
-    direction and distance to the firefly in new_firefly. """
+    agent postion new_agent. """
+    #network_output = network(encode(firefly - agent), hx)
+    network_output = network(encode(firefly - agent))
     x_step = network_output[0,0]
     y_step = network_output[0,1]
     x = agent[0,0]
@@ -70,9 +87,8 @@ def calc_distance(firefly, agent):
     return torch.norm(firefly - agent).data[0]
 
 
-def caught(firefly, agent, tolerance=1e-2):
-    """ Return a True if firefly has been caught and False
-    otherwise. """
+def caught(firefly, agent, tolerance=1e-1):
+    """ Return True if the firefly has been caught and False otherwise. """
     return calc_distance(firefly, agent) <= tolerance
 
 
@@ -87,6 +103,8 @@ def generate_trajectories(network, n, max_distance=10):
             print("Trajectory:", i + 1)
         firefly = new_trial(max_distance=max_distance)
         agent = Variable(torch.zeros([1,2]))
+        #hx = Variable(torch.zeros([1,2]))
+        hx = Variable(torch.randn([1,2]))
         print("firefly location (x, y):", to_array(firefly))
         # Rotate frame of reference 90 degrees for plotting so straight in
         # front of the agent is up instead of to the right.
@@ -97,7 +115,9 @@ def generate_trajectories(network, n, max_distance=10):
         #while not caught(firefly) and steps < 30*max_distance:
         while not caught(firefly, agent) and (steps == 0 or distance_change < 0):
             steps = steps + 1
-            agent = move(agent, network(firefly - agent))
+            #hx = network(firefly - agent, hx)
+            #agent = move(agent, hx)
+            agent = move(agent, firefly, network, hx)
             new_distance = calc_distance(firefly, agent)
             distance_change = new_distance - old_distance
             old_distance = new_distance
@@ -112,6 +132,15 @@ def generate_trajectories(network, n, max_distance=10):
     return trajectories, fireflies, final_distances
 
 
+
+"""
+I want to divide the functionality of this method into:
+    - a class for graphing data during training
+    ? something to catch Control-C to stop training and graph trajectories
+    ? something to allow interactive adjustment of the learning rate for SGD
+
+
+"""
 def practice(self, batch_size=1, max_trials=1000, distance=1,
              fireflies=None, plot_progress=False):
     """ Adjust the network weights to minimize the distance to the firefly

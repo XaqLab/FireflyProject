@@ -26,33 +26,6 @@ def roygbiv(x, n):
     return 2**16*r + 2**8*g + b
 
 
-def plot_progress(game, trial, dw_means, dw_stds, distances, batch_size):
-    """ Report training progress. """
-    if not game.training_figure:
-        game.training_figure = plt.figure()
-        axes1 = plt.subplot(211)
-        axes2 = plt.subplot(212)
-        plt.show(block=False)
-    else:
-        axes1, axes2 = game.training_figure.get_axes()
-        axes1.clear()
-        axes2.clear()
-    dim = game.network.dimensions
-    f_names = game.afun_names
-    axes1.set_title("%s %s %d" % (dim, f_names, batch_size))
-    axes1.set_ylabel("Mean dw +/-Std")
-    axes2.set_ylabel("Distance")
-    for i in range(dw_means.shape[0]):
-        x = range(1,trial)
-        axes1.plot(x, dw_means[i,:trial-1] + dw_stds[i,:trial-1])
-        axes1.plot(x, dw_means[i,:trial-1])
-        axes1.plot(x, dw_means[i,:trial-1] - dw_stds[i,:trial-1])
-    axes2.plot(distances[:trial])
-    axes2.set_ylim([0,5])
-    game.training_figure.canvas.draw()
-    game.training_figure.canvas.flush_events()
-
-
 def plot_trajectories(trajectories, fireflies):
     """ Plot a trajectory. """
     n = len(trajectories)
@@ -186,6 +159,53 @@ def plot_trials_histogram(num_trials):
     #handles, labels = axes.get_legend_handles_labels()
     #axes.legend(handles, labels, ncol=2)
     plt.show(block=False)
+
+
+class AccumulateData(object):
+    """ Accumulate data during training. """
+    def __init__(self):
+        self.distance = []
+        self.gradients = []
+        self.figure = plt.figure()
+        axes1 = plt.subplot(211)
+        axes2 = plt.subplot(212)
+        plt.show(block=False)
+
+
+    def append(self, datum):
+        """ Append new data. """
+        # append new data and call callback
+        self.distance.append(datum['distance'])
+        self.gradients.append(datum['gradients'])
+
+
+    def plot(self, datum):
+        """ Append new data and then plot all the data. """
+        self.append(datum)
+        axes1, axes2 = self.figure.get_axes()
+        axes1.clear()
+        axes2.clear()
+        #dim = game.network.dimensions
+        #f_names = game.afun_names
+        #axes1.set_title("%s %s %d" % (dim, f_names, batch_size))
+        axes1.set_ylabel("Distance")
+        axes2.set_ylabel("|Gradients|")
+        #for i in range(dw_means.shape[0]):
+        #    x = range(1,trial)
+        #    axes1.plot(x, dw_means[i,:trial-1] + dw_stds[i,:trial-1])
+        #    axes1.plot(x, dw_means[i,:trial-1])
+        #    axes1.plot(x, dw_means[i,:trial-1] - dw_stds[i,:trial-1])
+        axes1.plot(self.distance)
+        #import ipdb; ipdb.set_trace()
+        abs_gradients = abs(np.array(self.gradients))
+        axes2.plot(np.min(abs_gradients, axis=1), color="blue",
+                   linestyle="dotted")
+        axes2.plot(np.mean(abs_gradients, axis=1), color="blue")
+        axes2.plot(np.max(abs_gradients, axis=1), color="blue",
+                   linestyle="dotted")
+        #axes2.set_ylim([0,5])
+        self.figure.canvas.draw()
+        self.figure.canvas.flush_events()
 
 
 if __name__ == "__main__":
