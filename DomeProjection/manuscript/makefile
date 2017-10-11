@@ -4,6 +4,7 @@ bibliography = bibliography
 
 ${document}.pdf : ${document}_flat.tex
 	pdflatex ${document}_flat.tex
+	pdflatex ${document}_flat.tex
 	mv ${document}_flat.pdf ${document}.pdf
 
 ${document}_flat.tex : ${document}.tex ${bibliography}.bbl

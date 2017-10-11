@@ -247,15 +247,13 @@ Houston, TX, USA
 \end{flushleft}
 % Please keep the abstract below 300 words
 \section*{Abstract}
-For a virtual reality system to be capable of engaging a subject in
-navigational tasks, the visual stimuli it presents must cover the vast majority
-of the subject's visual field. This is challenging with rodents due
-to their exceptionally large visual fields.  Several research groups have reported using
-virtual reality systems with rodents, but none have published a method for
-minimizing or even measuring the viewing direction errors in their visual
-stimuli. Here we detail a calibration technique that both minimizes and
-quantifies the viewing direction errors in the visual stimuli of a murine
-virtual reality system.
+For a visual virtual reality system to be effective, the projected visual scene must engage the vast majority of the subject's visual field. 
+This is challenging with rodents due to their exceptionally large visual coverage. Several research groups have successfully developed 
+virtual reality systems capable of immersing rodents in a virtual visual world using a single projector and a single non-planar mirror to 
+project images to a curved screen. A major challenge for implementing these systems is correcting the distortion of the visual stimulus. 
+The ability to confidently evaluate and robustly minimize the errors in the display of visual stimuli is key to successfully utilizing a rodent 
+virtual reality system. Here we detail a calibration technique that is relatively simple to reproduce that minimizes visual display errors for 
+virtual reality system that utilize a partial sphere screen, partial sphere mirror, and a single projector.
 
 
 % Please keep the Author Summary between 150 and 200 words
@@ -267,122 +265,80 @@ virtual reality system.
 
 % Use "Eq" instead of "Equation" for equation citations.
 \section*{Introduction}
-Virtual reality systems provide neuroscience researchers the ability to
-investigate animals' navigational capabilities in a virtual environment that
-can be modified far easier than the physical environment in the laboratory.
-They also enable the investigation of navigation in head-fixed animals thereby
-facilitating the use of neural recording and neural imaging systems that can be
-difficult to use in freely moving animals.  The combination of virtual reality
-and neural monitoring have made it possible to investigate the neural
-representations of the world in awake, behaving animals performing complex
-navigational tasks.
+For decades, the study of rodent behavior has been performed using physical arenas and mazes \cite{Moser2008RodentSpaceRev}. 
+Thus, the physical dimensions of the laboratory space dictated the extent of rodent exploration. With the rise of rodent virtual reality 
+(VR) systems, the creation virtual spaces unbound by the physical lab space became possible. In addition, rodents can be sufficiently 
+stabilized inside the VR systems to allow for stable neural recording using electrophysiological or imaging methods 
+\cite{harvey2009intracellular, schmidt2013cellular, aronov2014engagement, keller2012sensorimotor, ayaz2013locomotion, saleem2013integration}. 
+The combination of these methodologies has revealed novel insights to how neurons respond during active navigation 
+\cite{harvey2009intracellular, schmidt2013cellular, aronov2014engagement, keller2012sensorimotor, ayaz2013locomotion, saleem2013integration}.
 
-Virtual reality systems have long been used in neuroscientific experimentation
-to engage primates in navigational behavior, however, attempts to get rodents
-to navigate virtual reality environments were unsuccessful until a virtual
-reality system was designed which accounted for the much larger field of view
-of the murine visual system \cite{holscher2005rats, keller2012sensorimotor,
-schmidt2013cellular, ayaz2013locomotion, saleem2013integration,
-aronov2014engagement, rickgauer2014simultaneous, aghajan2015impaired}.  A
-rodent’s visual field covers nearly the entire half sphere above the horizon
-and a large portion of the half sphere below it \cite{hughes1977topography,
-wagor1980retinotopic, schuett2002mapping, wang2007area}.  To construct virtual
-reality systems that cover such a large field of view, researchers typically
-resort to either the use of multiple displays \cite{keller2012sensorimotor,
-ayaz2013locomotion, saleem2013integration} or to the use of non-planar mirrors
-to increase the visual field covered by a projector
-\cite{harvey2009intracellular, schmidt2013cellular, aronov2014engagement}.  The
-difficulty in using multiple displays lies in hiding their bezels. The use of
-multiple displays has in some cases resulted in behavior which suggests that
-the animal is navigating the real space occupied by the displays rather that
-the virtual space shown on them \cite{holscher2005rats}.  The challenge of
-using non-planar mirrors is distortion of the projected visual stimuli. This
-distortion must be corrected by modifying the projected image to account for
-the geometry of the projection system.  In principle image modification is the
-straightforward process of solving a 3-dimensional trigonometry problem to
-achieve the desired viewing directions. In practice the geometry of the system
-must be known with sub-millimeter accuracy to achieve good results.  This is
-difficult to accomplish via measurement because some elements of the system,
-like the projector's focal point, are not directly observable.  
+A major challenge in designing a virtual world for rodents is adequately engaging their visual system. The visual field of mice and rats covers nearly 
+the entire half sphere above the horizon and a large portion of the half sphere below it \cite{hughes1977topography, wagor1980retinotopic, 
+schuett2002mapping, wang2007area}. Current systems address this challenge with multiple visual displays \cite{keller2012sensorimotor,
+ ayaz2013locomotion, saleem2013integration} or use non-planar mirrors to increase the visual field covered by a single projector 
+\cite{harvey2009intracellular, schmidt2013cellular, aronov2014engagement}. The difficulty in using multiple displays is the presence of bezels. 
+The use of multiple displays has, in some cases, resulted in behavior which suggests that the animal is navigating the real space occupied by 
+the displays rather that the virtual space shown on them \cite{holscher2005rats}. An alternative method is to employ non-planar mirrors to 
+increase the effective coverage of single projector \cite{harvey2009intracellular, schmidt2013cellular, aronov2014engagement}. 
+The most well-known examples use custom mirrors and projection surface shapes that, while not prohibitive, adds a layer of complexity 
+increasing the barrier of entry \cite{holscher2005rats, harvey2009intracellular}. Alternatively, one can use a simple spherical mirror and 
+spherical dome, making VR construction more accessible \cite {schmidt2013cellular}. Ultimately, the challenge of using non-planar mirrors 
+is correcting the distortion of the projected visual stimuli. Correcting of the image distortion, in principle, requires an image modification by 
+solving a straight-forward 3-dimensional trigonometry problem based on known specifications of the projector, mirror, projection surface, 
+and the observer’s location. While conceptually simple, in practice, correcting for the visual distortions from non-planar mirrors can be challenging.
 
-Multiple research groups have chosen to use non-planar mirrors in their murine
-virtual reality systems to cover the large visual field required
-\cite{holscher2005rats, harvey2009intracellular}, but none have published a
-method for calibrating these systems or published metrics that quantify the
-viewing direction errors in their system. In order to achieve a highly accurate
-reproduction of viewing directions in our murine virtual reality system, we
-have developed a calibration technique that utilizes a 3D printed calibration
-device to project spots of light in 37 known viewing directions. This device is
-placed at the animal's location inside the virtual reality system and a program
-developed in house is then used to move green dots around in the projector
-image until a green dot lies near the center of each spot projected by the
-calibration device. This mapping of points in the projector image to known
-viewing directions is then used to find values of the virtual reality system's
-geometric parameters that produce accurate calculated viewing directions by
-minimizing the difference between the known and calculated viewing directions.
-Once these parameters are known, an image can be modified such that 
-projection of the modified image in the virtual reality system produces the
-original image.
+To achieve the best results, the system measurements are ideally known to sub-millimeter accuracy. This is difficult to accomplish via measurement 
+because some elements of the system, like the projector's focal point, are not directly observable. Thus, to overcome these issues and achieve a 
+highly accurate reproduction of viewing directions in our rodent VR system, we have developed a technique that utilizes a 3D printed calibration 
+device to project spots of light in 37 known viewing directions relative the location of the observer's head. By mapping projected points in the 
+projector image to known viewing directions displayed by the 3D printed device, it is possible to find values of the virtual reality system's geometric 
+parameters (see Methods for list of parameters) that produce accurate calculated viewing directions by minimizing the difference between the known 
+and calculated viewing directions. Once the system’s geometric parameters are known, an image can be modified such that projection of the modified 
+image in the virtual reality system produces the original image. We will describe this method in detail. 
 
 \section*{Materials and Methods}
 
+
 \subsection*{System Geometry}
-
-Fig\ref{dome_setup} is a depiction of our murine virtual reality
-system. The visual stimuli from the projector reflect off a spherical mirror
-and onto a spherical screen. The head-fixed animal moves in the virtual world
-by walking on a polystyrene ball. This ball is suspended on a thin cushion of
-air and its motion is detected by optical sensors. Our objective for the
-visual stimuli in this system is to cover a 270\textdegree{} horizontal field of
-view, from 135\textdegree{} left of center to 135\textdegree{} right of center,
-and a 90\textdegree{} vertical field of view, from 20\textdegree{} below
-horizontal to 70\textdegree{} above horizontal.
-
 
 \subsection*{Viewing Direction Calculation}
 
-A three dimensional unit vector is used to represent the viewing direction from
-the animal to a point on the spherical screen.  Calculation of the viewing
-direction corresponding to a point in the projector image is performed in three
-steps as illustrated in Fig\ref{forward_mapping}. The first step is to
-calculate the three dimensional Cartesian coordinates of point N where light
-from a given point in the projector image strikes the mirror. This is
-accomplished by considering the triangle consisting of the mirror's center,
-point~M, the projector's focal point, point~P, and point~N. In this triangle
-the vector from M to P is fully specified, the vector from M to N has an
-unknown direction but a known length equal to the mirror radius, and the vector
-from P to N has an unknown length but a known direction which is calculated for
-the given point in the projector's image using parameters that characterize the
-projector, see section ???. The law of cosines is used to find the coordinates
-of point N as explained in section ???. The second step is to find the
-coordinates of point E where the light reflected off the mirror strikes the
-screen. This is the same problem as in step 1. In the triangle DEN the vector
-from D to N is fully specified, the vector from D to E has an unknown direction
-but a known length equal to the screen's radius, and the vector from N to E has
-an unknown length but a known direction which is calculated from the direction
-of the incoming light, the vector from P to N, and the direction of the vector
-perpendicular to the surface of the mirror at the point of reflection, the
-vector from M to N. See section ??? for the detailed calculation. Step~3 is
-to use the triangle AEM to calculate the vector from A to E and normalize it to
-get a unit vector that represents the viewing direction corresponding to the
-given point in the projector's image.
-
-
-This calculation requires quantitative values for several geometric propeties
-of this virtual reality system. Specifically the location of the projector's
-focal point, the aspect ratio of its image, an angle quantifying how much the
-image spreads out horizontally as it gets farther from the projector and a
-slope describing how far the image rises as it gets farther from the projector.
-Also required are the radius of the spherical mirror, the radius of the
-hemispherical screen, the location of the screen's center and the location of
-the animal's head. It proved to be exceedingly difficult to obtain sufficiently
-accurate values for all of these parameters through direct measurement.
-Consider for instance that the focal point of the projector, the center of the
-hemispherical screen and the center of the spherical mirror (the origin of our
-chosen coordinate system) are not directly observable. We therefore developed
-the calibration method described in the next section to find values of these
+Figure \ref{fig:SysScheme} is a depiction of our model VR system. Our objective 
+for the visual stimuli in this system is to cover ~ 270\textdegree{} horizontal field of view, from 135\textdegree{} left of center to 135\textdegree{} 
+right of center, and a 90\textdegree{} vertical field of view, from 20\textdegree{} below horizontal to 70\textdegree{} above horizontal. 
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{SysScheme.pdf}
+\caption{{\bf System schematic.}
+In our schematic, the configuration is set to emphasize the flexibility we have in the positioning of the point-A relative to the mirror, projector, and dome. Point-A is the observer's head location. Point-D is the origin of the sphere the projection dome is cut from. Point-E represents a location on the inner surface of the projection dome. Point-M is defined as the center of the sphere the mirror is cut from and is used as the origin point for our entire system. Point-N is the location that light from focal point from the projector, defined as point-P, hits.}
+\label{fig:SysScheme}
+\end{figure}
+Our model system uses a half sphere to display projected images and a quarter sphere mirror to reflect an image coming from a single 
+projector Fig. \ref{fig:SysScheme}. The animal’s head position is represented as a small ball sitting on a Styrofoam ball that is floating on a cushion of air 
+similar to other frictionless treadmill systems (REF). A three dimensional unit vector is used to represent the viewing direction from the animal 
+(Fig. 1 point-A) to a point on the spherical screen (Fig. 1 point-E). Calculation of the viewing direction corresponding to a point in the projector image 
+is performed in three steps as illustrated in Fig. \ref{fig:SysScheme}. The first step is to calculate the three dimensional Cartesian coordinates of point-N 
+where light from a given point in the projector image strikes the mirror. This is accomplished by considering the triangle consisting of the point-M, point-P 
+(the projector’s focal point), and point-N illustrated in Fig. 1 using the law of cosines. The second step is to find the coordinates of point-E by considering 
+the triangle defined by point-N, point-D, and point-E. Step 3 is to use the triangle defined by point-A, point-E, and point-M to calculate the vector from
+ point-A to point-E and normalize it to get a unit vector that represents the viewing direction corresponding to the given point in the projector's image. 
+Note that in our method, we have chosen point-M to be the origin of the system.
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{FRUS.pdf}
+\caption{{\bf Frustrum.}
+The pixel position from the projected image are represented by the variables u and v. The resolution of our projector is 1280x720. The image spread (and height) and rise are related to the throw distance.}
+\label{fig:FRUS}
+\end{figure}
+This calculation requires quantitative values for several geometric properties of this virtual reality system. Specifically the location of the projector's focal point, 
+the aspect ratio of its image (Fig. \ref{fig:FRUS}), and an angle quantifying how much the image spreads out horizontally as it gets farther from the projector and 
+a slope describing how far the image rises as it gets farther from the projector (Fig. \ref{fig:FRUS}). Also required are the radius of the spherical mirror, the radius 
+of the hemispherical screen, the location of the screen's center and the location of the animal's head relative to the projector focal point, point-P (Fig. \ref{fig:SysScheme}). While 
+many of these parameters can be theoretically measured or provided, obtaining a sufficiently accurate values for all of these parameters is challenging. 
+Particularly challenging is that the focal point of the projector, the center of the hemispherical screen and the center of the spherical mirror (the origin of our 
+chosen coordinate system) are not directly observable. We therefore developed the calibration method described in the next section to find values of these 
 parameters which result in accurate calculated viewing directions.
-
 \begin{eqnarray}
 \label{eq:schemeP}
 	\mathrm{P_Y} = \underbrace{H(Y_n) - H(Y_n|\mathbf{V}^{Y}_{n})}_{S_Y} +
@@ -390,102 +346,186 @@ parameters which result in accurate calculated viewing directions.
                        H(Y_n|\mathbf{V}^{X,Y}_{n})}_{T_{X\rightarrow Y}},
 \end{eqnarray}
 
+(Description of equation above missing)
+
+The aspect ratio of the image from the projector is provided by the manufacturer. Here we used a DepthQ projector (1280x720 resolution).  The image rise for our 
+projector is estimated 15 percent of the image height at a given throw distance. The image height is found by dividing the throw distance by the factor 1.39 for the 
+minimum magnification setting. The image width is computed from the aspect ratio setting (16:9). The quarter sphere mirror is a standard 18-inch diameter safety 
+mirror. The dome projection surface was custom made was designed to have a radius of 70 cm. We leveled the projector and placed it at a distance such that at the 
+minimum magnification of the projector, the image being displayed (before any correction) was qualitatively crisp. We then proceeded to perform our custom 
+calibration process.
 
 \subsection*{Calibration Process}
+One of the keys to making an accurate image from the perspective of the observer is properly correcting for image distortion due to the use of a curved mirror to 
+reflect the projected image. We have developed a method for image correction that is relatively simple to replicate. We use a 3D printed calibration device (Fig. \ref{fig:3Ddev}) 
+that projects 37 spots of light in known directions, four rows of nine spots plus one spot straight overhead. Each row has 9 spots located at yaw angles of -120, -90, 
+-60, -30, 0, 30, 60, 90, and 120 degrees where 0 degrees is straight ahead, negative angles refer to the left visual hemifield and positive angles refer to locations in 
+the right visual hemifield. The four rows are at pitch angles of -15, 0, 30, and 60 degrees where negative angles referring to the lower visual field and positive angles 
+the upper visual field. This calibration device is placed at the animal's head location inside the virtual reality system. The light source is a diffuse light provided by a 
+simple flashlight without any casing to confine the light beams. The result is circles with a radius of approximately 1 visual degree (Fig. \ref{fig:Dots}). To calibrate 
+our image, we projected green dots in grid-like fashion and allow those points fall onto the dome projection surface. We then manually move each dot in a pixel wise 
+fashion until each dot falls into the proper corresponding spot projected by the calibration device. We then save the pixel location of each dot emanating from the 
+projector. This file constitutes a mapping between 37 points in the projector image and 37 known viewing directions which can be used to find virtual reality system 
+geometry parameter values which produce accurate viewing directions. These parameter values are found by minimizing the sum of the square L2 norms of the 
+vectors which constitute the differences between the calculated and known viewing directions. The values we are particularly interested is are the y and z coordinates 
+of the dome, animal, and projector. The x coordinate is assumed to be the same meaning that the center of the dome, animal, and projector image center all fall on the 
+same plane. This is done through careful construction. 
 
-After initially pursuing a camera based calibration method, we moved to a much
-simpler method that utilizes a 3D printed calibration device. Camera based
-methods require either fisheye lenses or numerous overlapping photographs (or
-both) to achieve the wide field of view required to calibrate a murine virtual
-reality system and correcting for camera distortion and the movement of the
-camera's focal point between photos becomes complicated.  The calibration
-device we use projects 37 spots of light in known directions, four rows of nine
-spots plus one spot straight overhead. Each row of 9 spots has spots at yaw
-angles of -120, -90, -60, -30, 0, 30, 60, 90, and 120 degrees where 0 degrees
-is straight ahead, negative angles are to the left and positive angles are to
-the right.  The four rows are at pitch angles of -15, 0, 30, and 60 degrees
-where negative angles are downward and positive angles are upward. The
-additional spot straight overhead has a pitch angle of 90 degrees. This
-calibration device is placed at the animal's location inside the virtual
-reality system and software developed specifically for this calibration method
-is used to move green dots around in the projector's image until there's a
-green dot in the center of each spot projected by the calibration device. This
-software is then used to save a file containing the location of all the green
-dots. This file constitutes a mapping between 37 points in the projector image
-and 37 known viewing directions which can be used to find virtual reality
-system geometry parameter values which produce accurate viewing directions
-using the calculation procedure described in section\ref{}.  These parameter
-values are found using an optimization method which minimizes the sum of the
-square L2 norms of the vectors which constitute the differences between the
-calculated and known viewing directions.
-
-Insert table of viewing direction differences
-
-
-\subsection{Image Modification}
-
-
-
-\subsection*{Etiam eget sapien nibh.}
-
-% For figure citations, please use "Fig" instead of "Figure".
-Nulla mi mi, Fig~\ref{fig1} venenatis sed ipsum varius, volutpat euismod diam.
-
-% Place figure captions after the first paragraph in which they are cited.
-\begin{figure}[!h]
-\caption{{\bf Bold the figure title.}
-Figure caption text here, please use this space for the figure panel
-descriptions instead of using subfigure commands. A: Lorem ipsum dolor sit
-amet. B: Consectetur adipiscing elit.}
-\label{fig1}
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{3Dcaldev.pdf}
+\caption{{\bf 3D printed calibration device.}
+A. Rendering of the 3D device. B. 3D printed device without flashlight. C. 3D printed device with flashlight.}
+\label{fig:3Ddev}
 \end{figure}
+\subsection*{Image Modification}
+
+The result of the minimization routine provides us with the parameters necessary to perform a pixel wise mapping from the projector to the appropriate location on the dome. 
+The relationship between these two is given by:
+
+INSERT EQUATION 2.
+
+This relationship permits the user to create an image in a program such as OpenGL and then warp the image such that once it is displayed on the dome after reflecting off 
+the mirror, the displayed image appears undistorted to the observer. Figure 5 provides examples of corrected and uncorrected images and is described in the Results section. 
+
+
+%% For figure citations, please use "Fig" instead of "Figure".
+%Nulla mi mi, Fig~\ref{fig1} venenatis sed ipsum varius, volutpat euismod diam.
+%
+%% Place figure captions after the first paragraph in which they are cited.
+%\begin{figure}[!h]
+%\caption{{\bf Bold the figure title.}
+%Figure caption text here, please use this space for the figure panel
+%descriptions instead of using subfigure commands. A: Lorem ipsum dolor sit
+%amet. B: Consectetur adipiscing elit.}
+%\label{fig1}
+%\end{figure}
 
 % Results and Discussion can be combined.
 \section*{Results}
 
-% Place tables after the first paragraph in which they are cited.
-\begin{table}[!ht]
-\begin{adjustwidth}{-2.25in}{0in} % Comment out/remove adjustwidth environment if table fits in text column.
+\subsection*{Finding the geometric values}
+
+An important step for our method is obtaining quantitative values for several geometric properties. As previously specified in the Materials and Methods, we are particularly 
+interested in mirror radius, the dome radius, and the y and z position of the animal, dome, projector relative the mirror point-P (Fig. 1). Our dome was designed to be 
+approximately 70 cm in radius which is the value our method provided. The mirror diameter is reported as 18 in, our algorithm provided one of 17.7 in (1.67 percent smaller 
+than expected). We estimated the throw distance to be approximately 79.5 cm which would yield a rise position of approximately 8.57 cm. The final rise position determined 
+by our algorithm was 8.4 cm (2.1 percent smaller). While none of these values are hugely inaccurate, the consistent difference does illustrate how difficult it is to find exact 
+values. While having hand measurements of these values is not necessary, they are useful because they provide realistic constraints on our algorithm rather than do a full 
+exhaustive search. 
+\begin{figure}[h]
 \centering
-\caption{
-{\bf Table caption Nulla mi mi, venenatis sed ipsum varius, volutpat euismod diam.}}
-\begin{tabular}{|l+l|l|l|l|l|l|l|}
-\hline
-\multicolumn{4}{|l|}{\bf Heading1} & \multicolumn{4}{|l|}{\bf Heading2}\\ \thickhline
-$cell1 row1$ & cell2 row 1 & cell3 row 1 & cell4 row 1 & cell5 row 1 & cell6 row 1 & cell7 row 1 & cell8 row 1\\ \hline
-$cell1 row2$ & cell2 row 2 & cell3 row 2 & cell4 row 2 & cell5 row 2 & cell6 row 2 & cell7 row 2 & cell8 row 2\\ \hline
-$cell1 row3$ & cell2 row 3 & cell3 row 3 & cell4 row 3 & cell5 row 3 & cell6 row 3 & cell7 row 3 & cell8 row 3\\ \hline
-\end{tabular}
-\begin{flushleft} Table notes Phasellus venenatis, tortor nec vestibulum
-	mattis, massa tortor interdum felis, nec pellentesque metus tortor nec
-	nisl. Ut ornare mauris tellus, vel dapibus arcu suscipit sed.
-\end{flushleft}
-\label{table1}
-\end{adjustwidth}
-\end{table}
+\includegraphics[width=\textwidth]{Dots.pdf}
+\caption{{\bf Calibration dots.}
+The circles of light come from the 3D calibration device (see Fig. \ref{fig:3Ddev}). The green dots are the position after the Calibration process described in the Materials and Methods}
+\label{fig:Dots}
+\end{figure}
+\subsection*{Image Modification}
+Because we focus on only a few parameters of interest to simplify the procedure, there are a few areas where the resulting projecting could be improved. In Fig. \ref{fig:Dots}, the 
+green dots are the final positions after the calibration has been applied. Note that the green dots are not perfectly centered. However the radius of each of the projected 
+circles from the 3D calibration device is approximately 1 visual degree. Thus as long as the green dots fall within these circles they are very close to the ideal positions. The 
+reasons why they do not fall into the ideal positions are in part due to the variables we do not allow to vary. We expand on this point in the Discussion.
+
+\subsection*{Image display}
+
+To illustrate the effectiveness of our method, we provide a set of corrected, non-corrected image, and native image in Fig. \ref{fig:Compare}. The corrected and non-corrected images 
+were taken by a webcam inside the VR system from the perspective of a viewer. GET A SET AND DESCRIBE. 
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{original_projected.pdf}
+\caption{{\bf Original and Projected images.}
+A/B. Original images. C/D. Image captures from a webcam placed at the location of the observer's head after projecting them onto the spherical projection surface.}
+\label{fig:Compare}
+\end{figure}
+
+\subsection*{Image Modification}
+Also notable is that we are able to perform these correction in a situation where viewing distance of the observer is not the radius of the dome in all viewing directions. 
+In our configuration, our observer is raised relative the plane that marks the displayable surface of our half sphere. Our algorithm places the animal 18.5 cm higher than 
+this plane and produce good quality images to the human eye. This has the same desired effect that pitching the dome forward to provide some lower visual field coverage 
+\cite{schmidt2013cellular} or constructing a toroidal screen to encompass the lower visual field \cite{holscher2005rats, harvey2009intracellular}. By raising the animal, we 
+are able to provide 20+ degrees of the lower visual field without having to add any additional surface. 
+
+% Place tables after the first paragraph in which they are cited.
+%\begin{table}[!ht]
+%\begin{adjustwidth}{-2.25in}{0in} % Comment out/remove adjustwidth environment if table fits in text column.
+%\centering
+%\caption{
+%{\bf Table caption Nulla mi mi, venenatis sed ipsum varius, volutpat euismod diam.}}
+%\begin{tabular}{|l+l|l|l|l|l|l|l|}
+%\hline
+%\multicolumn{4}{|l|}{\bf Heading1} & \multicolumn{4}{|l|}{\bf Heading2}\\ \thickhline
+%$cell1 row1$ & cell2 row 1 & cell3 row 1 & cell4 row 1 & cell5 row 1 & cell6 row 1 & cell7 row 1 & cell8 row 1\\ \hline
+%$cell1 row2$ & cell2 row 2 & cell3 row 2 & cell4 row 2 & cell5 row 2 & cell6 row 2 & cell7 row 2 & cell8 row 2\\ \hline
+%$cell1 row3$ & cell2 row 3 & cell3 row 3 & cell4 row 3 & cell5 row 3 & cell6 row 3 & cell7 row 3 & cell8 row 3\\ \hline
+%\end{tabular}
+%\begin{flushleft} Table notes Phasellus venenatis, tortor nec vestibulum
+%	mattis, massa tortor interdum felis, nec pellentesque metus tortor nec
+%	nisl. Ut ornare mauris tellus, vel dapibus arcu suscipit sed.
+%\end{flushleft}
+%\label{table1}
+%\end{adjustwidth}
+%\end{table}
 
 
 %PLOS does not support heading levels beyond the 3rd (no 4th level headings).
-\subsection*{\lorem\ and \ipsum\ Nunc blandit a tortor.}
-\subsubsection*{3rd Level Heading.} 
-
-\begin{enumerate}
-	\item{react}
-	\item{diffuse free particles}
-	\item{increment time by dt and go to 1}
-\end{enumerate}
-
-
-\subsection*{Sed ac quam id nisi malesuada congue.}
-
-
-\begin{itemize}
-	\item First bulleted item.
-	\item Second bulleted item.
-	\item Third bulleted item.
-\end{itemize}
+%\subsection*{\lorem\ and \ipsum\ Nunc blandit a tortor.}
+%\subsubsection*{3rd Level Heading.} 
+%
+%\begin{enumerate}
+%	\item{react}
+%	\item{diffuse free particles}
+%	\item{increment time by dt and go to 1}
+%\end{enumerate}
+%
+%
+%\subsection*{Sed ac quam id nisi malesuada congue.}
+%
+%
+%\begin{itemize}
+%	\item First bulleted item.
+%	\item Second bulleted item.
+%	\item Third bulleted item.
+%\end{itemize}
 
 \section*{Discussion}
+
+Challenges
+One of the challenges of our method, as presented, is that we assume the center of the observer’s head, the quarter sphere mirror, and the center of the 
+projected image all fall onto a single plane. In practice, this is quite difficult to achieve. We used a plumb line and displayed a center line and manually moved the 
+individual components until everything was bisected by the plumb line. In theory we add this to the variable that we search for. But increasing the number of 
+variables we search for comes with its own concerns. The inclusion of a third position parameters for the dome, the projector, and the observer’s head increases 
+the potential for local minima that have to be avoided. While this is not likely to be too computationally expensive, the addition of this parameter can make arriving 
+at a values unreasonably difficult. Thus we chose the difficulties in manually aligning these centers to reduce the number of variables that need to be considered in 
+our software. 
+
+A second challenge is shadowing. In our configuration, the position of the animal and platform used to support the animal will casts a shadow preventing any images 
+from being displayed. This is a design challenge that ideally falls within the 90 degree wedge behind the rodent’s head which is close to full horizontal visual field 
+coverage (REF). This will be difficult depending on what materials are used to support the chosen rodent. For rats the support system necessary will cast a larger 
+shadow than one for a mouse. However amount of shadow cast can be mitigated, but not avoided, with clever design of the supporting mechanism. Once the 
+supporting mechanism is set, the amount of shadowing can be assessed.
+
+A final challenge is more of a consideration when designing a system similar to that presented here. It is not advisable to attempt using a 9 in diameter quarter sphere 
+mirror with our dome. Similarly, it is not advisable to use an 18 in diameter quarter sphere mirror with a dome of 35 cm radius. In the former, it would be difficult to find 
+positions that would allow one to cover enough of the dome surface to achieve adequate visual field coverage. The latter would not have this issue but would present 
+practical challenges given the size of the mirror relative to the size of the projection dome.  
+
+Benefits
+The main benefit of our method is that it allows for the user to optimize the visual scene for a large number of potential components and positions of the animal. 
+While we have the space to house a large 70 cm radius half sphere. This might not be the case for all. However our method allows others to choose sizes that better 
+fit the constraints of their lab and provides them with a method to correct for visual distortions. In addition, we could theoretically use less half of sphere and our method 
+would still work. This flexibility of design is permissible because we allow for the observer to be in any position inside the dome. In our example we move the position of the 
+observer’s head 18.5 cm above point-D (Fig. 1). This allows us to provide 20+ degrees of the lower visual field without needing to add additional projection space. Past 
+examples have placed the viewer at point-D (see REF). The reason for this is similar to our aligning the observer’s head, the mirrors center, the dome’s center, and the
+ projected image center. By centering the mouse and the deflecting mirror, several parameters are simplified. One of the parameters is the viewing distance to all points on 
+the screen are defined by the radius of the dome. This would reduce the complexity of the distortion correction considerably. However the disadvantage of this is such a 
+configuration necessarily sacrifices visual field coverage unless the dome is constructed in a fashion that extends the projection surface. Another tactic to gaining 
+more visual field is to use cones or toroidal screens with custom mirrors \cite{holscher2005rats, harvey2009intracellular}, to use a cone shape \cite{aronov2014engagement}, 
+or simple boxes \cite{aghajan2015impaired}. Regardless of the specifics components used to construct an 
+immersive VR system, in the end, the problem still remains the same, how to calibrate the visual scene. By allowing for different geometric configurations providing parts of 
+the lower visual field of locations behind the head are a simple matter of simply moving the observer into the dome a certain distance. Because we use simple components that 
+are more widely accessible, our method should be more accessible by a wider array of experimenters. However should other shapes be used, our method is theoretically 
+adjustable to fit a wider array of potential system designs.
 
 \section*{Conclusion}
 
